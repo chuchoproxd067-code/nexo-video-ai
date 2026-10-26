@@ -1,0 +1,3 @@
+#pragma once
+#define NEXO_VERSION "@PROJECT_VERSION@"
+#define NEXO_GIT_COMMIT "@NEXO_GIT_COMMIT@"

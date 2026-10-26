@@ -1,0 +1,3 @@
+add_executable(nexo_core_tests core_tests.cpp)
+target_link_libraries(nexo_core_tests PRIVATE nexo_core)
+add_test(NAME nexo_core_tests COMMAND nexo_core_tests)

@@ -1,0 +1,82 @@
+name: Windows build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.*"
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DNEXO_GIT_COMMIT="${{ github.sha }}"
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build
+
+      - name: Unit tests
+        shell: pwsh
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package (portable ZIP)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/NEXO-VIDEO-AI | Out-Null
+          Copy-Item build/src/app/nexo-video-ai.exe dist/NEXO-VIDEO-AI/
+          windeployqt --release --no-translations dist/NEXO-VIDEO-AI/nexo-video-ai.exe
+          @(
+            "NEXO VIDEO AI"
+            "commit:  ${{ github.sha }}"
+            "fecha:   $(Get-Date -Format u)"
+            "runner:  ${{ runner.os }} ${{ runner.arch }}"
+            "config:  Release, Qt 6.8 (MSVC 2022)"
+            "estado:  fase 2 - esqueleto, sin motor multimedia"
+          ) | Set-Content dist/NEXO-VIDEO-AI/build-info.txt
+          Compress-Archive -Path dist/NEXO-VIDEO-AI -DestinationPath NEXO-VIDEO-AI-windows-x64.zip
+
+      # Comprueba que el paquete arranca solo con lo que contiene el ZIP (sin las
+      # herramientas de compilación). No abre la ventana: usa --version.
+      - name: Smoke test of the packaged app
+        shell: pwsh
+        run: |
+          Expand-Archive NEXO-VIDEO-AI-windows-x64.zip -DestinationPath smoke
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"   # sin Qt ni MSVC en PATH
+          $p = Start-Process smoke/NEXO-VIDEO-AI/nexo-video-ai.exe -ArgumentList "--version" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "La aplicación empaquetada no arrancó (código $($p.ExitCode))" }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NEXO-VIDEO-AI-windows-x64-${{ github.sha }}
+          path: NEXO-VIDEO-AI-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
