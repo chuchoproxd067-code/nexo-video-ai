@@ -7,6 +7,7 @@
 
 #include "core/History.h"
 #include "core/Json.h"
+#include "core/MltXml.h"
 #include "core/Project.h"
 #include "core/Timeline.h"
 
@@ -320,6 +321,47 @@ static void testProjectFiles() {
     fs::remove_all(dir);
 }
 
+static bool contains(const std::string& hay, const std::string& needle) {
+    return hay.find(needle) != std::string::npos;
+}
+
+static void testMltXml() {
+    Timeline tl({30, 1});
+    const auto v = tl.addTrack("V1", TrackKind::Video);
+    const auto a = tl.addTrack("A1", TrackKind::Audio);
+    tl.addClip(v, makeClip(10, 50, 20, "C:\\media\\a&b.mp4"));    // hueco inicial de 10
+    tl.addClip(v, makeClip(80, 20, 0, "c.mp4"));                   // hueco de 20
+    tl.addClip(a, makeClip(0, 100, 0, "m.wav"));
+    ExportSettings st;
+    st.width = 640; st.height = 360;
+    const XmlResult r = buildMltXml(tl, st);
+    CHECK(r.ok && r.error.empty());
+    CHECK(contains(r.xml, "frame_rate_num=\"30\""));
+    CHECK(contains(r.xml, "width=\"640\" height=\"360\""));
+    CHECK(contains(r.xml, "display_aspect_num=\"16\" display_aspect_den=\"9\""));
+    CHECK(contains(r.xml, "<tractor id=\"main\" in=\"0\" out=\"99\">"));   // 100 fotogramas
+    CHECK(contains(r.xml, "<blank length=\"10\"/>"));
+    CHECK(contains(r.xml, "in=\"20\" out=\"69\""));                      // 20 + 50 - 1
+    CHECK(contains(r.xml, "<blank length=\"20\"/>"));                    // 60 -> 80
+    CHECK(contains(r.xml, "C:/media/a&amp;b.mp4"));                      // escape y barras
+    CHECK(!contains(r.xml, "a&b"));
+    CHECK(contains(r.xml, "hide=\"video\""));                            // pista de audio
+    // Una mezcla por pista del proyecto y un composite solo para la de video.
+    std::size_t mixes = 0, comps = 0;
+    for (std::size_t p = 0; (p = r.xml.find(">mix<", p)) != std::string::npos; ++p) ++mixes;
+    for (std::size_t p = 0; (p = r.xml.find(">composite<", p)) != std::string::npos; ++p) ++comps;
+    CHECK(mixes == 2 && comps == 1);
+    // Cada etiqueta de apertura de los elementos principales tiene su cierre.
+    CHECK(contains(r.xml, "</mlt>") && contains(r.xml, "</tractor>") && contains(r.xml, "</multitrack>"));
+
+    // Errores explícitos
+    CHECK(!buildMltXml(Timeline({30, 1}), st).ok);                       // vacía
+    ExportSettings odd; odd.width = 641; odd.height = 360;
+    CHECK(!buildMltXml(tl, odd).ok);
+    ExportSettings zero; zero.width = 0;
+    CHECK(!buildMltXml(tl, zero).ok);
+}
+
 int main() {
     testTimecode();
     testAddAndOverlap();
@@ -331,6 +373,7 @@ int main() {
     testProjectRoundTrip();
     testProjectRejectsBadFiles();
     testProjectFiles();
+    testMltXml();
     std::printf("%d comprobaciones, %d fallos\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

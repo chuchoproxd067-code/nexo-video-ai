@@ -1,0 +1,137 @@
+name: Windows build (MSYS2 + MLT)
+
+# Cadena de herramientas elegida (ver DECISIONS/0003): MSYS2 UCRT64 para todo.
+# Compila el núcleo y la interfaz Qt, ejecuta las pruebas, comprueba que MLT
+# renderiza el MP4 de una línea de tiempo real generada por NEXO, empaqueta y
+# prueba el paquete SIN MSYS2 en el PATH.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: msys2-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-mlt
+            mingw-w64-ucrt-x86_64-ffmpeg
+
+      - name: Configure
+        shell: msys2 {0}
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEXO_GIT_COMMIT="${{ github.sha }}"
+
+      - name: Build
+        shell: msys2 {0}
+        run: cmake --build build
+
+      - name: Unit tests
+        shell: msys2 {0}
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Generate test clips and project XML
+        shell: msys2 {0}
+        run: |
+          mkdir -p evidence
+          ffmpeg -hide_banner -loglevel error -y \
+            -f lavfi -i testsrc=duration=4:size=640x360:rate=30 -f lavfi -i sine=frequency=440:duration=4 \
+            -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest evidence/clipA.mp4
+          ffmpeg -hide_banner -loglevel error -y \
+            -f lavfi -i smptebars=duration=4:size=640x360:rate=30 -f lavfi -i sine=frequency=880:duration=4 \
+            -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest evidence/clipB.mp4
+          build/tests/mlt_xml_tool evidence/proj.mlt evidence/clipA.mp4 evidence/clipB.mp4
+          cat evidence/proj.mlt
+
+      - name: Render NEXO timeline with melt (MSYS2 install)
+        shell: msys2 {0}
+        run: melt evidence/proj.mlt -consumer avformat:evidence/out_msys.mp4 vcodec=libx264 acodec=aac 2>&1 | tee evidence/melt-msys.log
+
+      - name: Versions and licensing evidence
+        shell: msys2 {0}
+        run: |
+          {
+            pacman -Q mingw-w64-ucrt-x86_64-mlt mingw-w64-ucrt-x86_64-ffmpeg mingw-w64-ucrt-x86_64-qt6-base
+            pacman -Qi mingw-w64-ucrt-x86_64-mlt mingw-w64-ucrt-x86_64-ffmpeg mingw-w64-ucrt-x86_64-qt6-base | grep -E "^(Name|Version|Licenses)"
+            ffmpeg -hide_banner -version | grep -E "^(ffmpeg version|configuration)"
+          } 2>&1 | tee evidence/versions.txt
+
+      - name: Package
+        shell: msys2 {0}
+        run: |
+          scripts/package_windows_msys2.sh build/src/app/nexo-video-ai.exe dist/NEXO-VIDEO-AI
+          {
+            echo "NEXO VIDEO AI"
+            echo "commit:  ${{ github.sha }}"
+            echo "fecha:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "config:  Release, MSYS2 UCRT64, Qt6, MLT + FFmpeg"
+            echo "uso:     nexo-video-ai.exe ; melt.exe necesita MLT_REPOSITORY=lib\\mlt y MLT_DATA=share\\mlt"
+          } > dist/NEXO-VIDEO-AI/build-info.txt
+
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path dist/NEXO-VIDEO-AI -DestinationPath NEXO-VIDEO-AI-msys2-windows-x64.zip
+
+      # Se ejecuta con un PATH que NO incluye MSYS2: solo lo que hay en el ZIP.
+      - name: Smoke test of the packaged app and melt
+        shell: pwsh
+        run: |
+          Expand-Archive NEXO-VIDEO-AI-msys2-windows-x64.zip -DestinationPath smoke
+          $pkg = (Resolve-Path smoke/NEXO-VIDEO-AI).Path
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $env:MLT_REPOSITORY = "$pkg\lib\mlt"
+          $env:MLT_DATA = "$pkg\share\mlt"
+          $p = Start-Process "$pkg\nexo-video-ai.exe" -ArgumentList "--version" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "nexo-video-ai.exe empaquetado no arrancó (código $($p.ExitCode))" }
+          $m = Start-Process "$pkg\melt.exe" -ArgumentList "evidence/proj.mlt","-consumer","avformat:evidence/out_pkg.mp4","vcodec=libx264","acodec=aac" `
+                 -Wait -PassThru -RedirectStandardError evidence/melt-pkg.log -NoNewWindow
+          if ($m.ExitCode -ne 0) { Get-Content evidence/melt-pkg.log -Tail 40; throw "melt empaquetado falló (código $($m.ExitCode))" }
+
+      - name: Verify exported videos
+        shell: msys2 {0}
+        run: |
+          for f in out_msys out_pkg; do
+            echo "== $f"
+            ffprobe -v error -count_frames -show_entries stream=codec_type,codec_name,width,height,nb_read_frames -of default=nw=1 evidence/$f.mp4 | tee evidence/ffprobe_$f.txt
+            grep -q "width=640"  evidence/ffprobe_$f.txt
+            grep -q "height=360" evidence/ffprobe_$f.txt
+            grep -q "codec_type=audio" evidence/ffprobe_$f.txt
+            grep -q "nb_read_frames=120" evidence/ffprobe_$f.txt   # 60 + 60 fotogramas de video
+          done
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: msys2-evidence-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: NEXO-VIDEO-AI-msys2-windows-x64-${{ github.sha }}
+          path: NEXO-VIDEO-AI-msys2-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
