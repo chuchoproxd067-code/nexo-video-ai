@@ -92,20 +92,49 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path dist/NEXO-VIDEO-AI -DestinationPath NEXO-VIDEO-AI-msys2-windows-x64.zip
 
+      # Diagnóstico: DLL que faltan en el paquete (aparece como anotación del job).
+      - name: Diagnose package dependencies
+        continue-on-error: true
+        shell: msys2 {0}
+        run: |
+          cd dist/NEXO-VIDEO-AI
+          missing=""
+          for f in nexo-video-ai.exe melt.exe $(find lib -name '*.dll' | head -60) $(find platforms -name '*.dll'); do
+            m=$(PATH=/c/Windows/System32:/usr/bin ldd "$f" 2>/dev/null | grep -i "not found" | tr -s ' ' | tr '\n' ';' || true)
+            [ -n "$m" ] && missing="$missing $f => $m |"
+          done
+          if [ -n "$missing" ]; then echo "::error title=DLL que faltan en el paquete::${missing}"; else echo "Sin DLL faltantes según ldd"; fi
+          ls | head -80 | tr '\n' ' '
+
       # Se ejecuta con un PATH que NO incluye MSYS2: solo lo que hay en el ZIP.
-      - name: Smoke test of the packaged app and melt
+      - name: Smoke test - packaged app
         shell: pwsh
         run: |
           Expand-Archive NEXO-VIDEO-AI-msys2-windows-x64.zip -DestinationPath smoke
           $pkg = (Resolve-Path smoke/NEXO-VIDEO-AI).Path
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $p = Start-Process "$pkg\nexo-video-ai.exe" -ArgumentList "--version" -Wait -PassThru
+          $hex = '0x{0:X8}' -f $p.ExitCode
+          if ($p.ExitCode -ne 0) {
+            Write-Host "::error title=nexo-video-ai.exe empaquetado no arrancó::código de salida $($p.ExitCode) ($hex). 0xC0000135 = falta una DLL; 0xC000007B = DLL de arquitectura incorrecta."
+            exit 1
+          }
+
+      - name: Smoke test - packaged melt renders the NEXO project
+        shell: pwsh
+        run: |
+          $pkg = (Resolve-Path smoke/NEXO-VIDEO-AI).Path
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
           $env:MLT_REPOSITORY = "$pkg\lib\mlt"
           $env:MLT_DATA = "$pkg\share\mlt"
-          $p = Start-Process "$pkg\nexo-video-ai.exe" -ArgumentList "--version" -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw "nexo-video-ai.exe empaquetado no arrancó (código $($p.ExitCode))" }
           $m = Start-Process "$pkg\melt.exe" -ArgumentList "evidence/proj.mlt","-consumer","avformat:evidence/out_pkg.mp4","vcodec=libx264","acodec=aac" `
-                 -Wait -PassThru -RedirectStandardError evidence/melt-pkg.log -NoNewWindow
-          if ($m.ExitCode -ne 0) { Get-Content evidence/melt-pkg.log -Tail 40; throw "melt empaquetado falló (código $($m.ExitCode))" }
+                 -Wait -PassThru -RedirectStandardError evidence/melt-pkg.log -RedirectStandardOutput evidence/melt-pkg.out -NoNewWindow
+          $hex = '0x{0:X8}' -f $m.ExitCode
+          if ($m.ExitCode -ne 0 -or -not (Test-Path evidence/out_pkg.mp4)) {
+            $tail = ((Get-Content evidence/melt-pkg.log -Tail 25 -ErrorAction SilentlyContinue) -join "%0A")
+            Write-Host "::error title=melt empaquetado falló (código $($m.ExitCode) $hex)::$tail"
+            exit 1
+          }
 
       - name: Verify exported videos
         shell: msys2 {0}
