@@ -4,12 +4,14 @@ Fase actual: **2 — Base y compilación remota** (en curso).
 
 | Función | Clasificación | Evidencia |
 |---|---|---|
-| Modelo de línea de tiempo (añadir, mover, recortar, dividir, eliminar) | COMPLETA Y VERIFICADA (solo el modelo) | `tests/core_tests.cpp`: 75 comprobaciones, 0 fallos, compilado con GCC 13 en Linux |
+| Modelo de línea de tiempo (añadir, mover, recortar, dividir, eliminar) | COMPLETA Y VERIFICADA (solo el modelo) | `tests/core_tests.cpp`: pruebas del núcleo, compiladas con GCC 13 en Linux (ver el total más abajo) |
 | Deshacer/rehacer | COMPLETA Y VERIFICADA (modelo) | Mismas pruebas |
 | Conversión de tiempos | COMPLETA Y VERIFICADA | Mismas pruebas; sin drop-frame |
 | Ventana Qt con línea de tiempo de demostración | PARCIAL: compila, empaqueta y abre | Run #1 de *Windows build* en verde (commit 7b2298b): compila con MSVC y Qt 6.8, pasa `ctest`, el ZIP empaquetado arranca con `--version`. El propietario confirmó a mano que el ZIP descargado abre la interfaz. **Sin confirmar:** que los botones Dividir, Deshacer y Rehacer funcionen |
 | Workflow de Windows | COMPLETA Y VERIFICADA (primera versión) | Run #1: éxito en 2 min 10 s; artefacto de 45,9 MB. Aviso de GitHub: Node.js 20 obsoleto en `checkout@v4`, `upload-artifact@v4` y `msvc-dev-cmd@v1` (sin efecto por ahora) |
 | Viabilidad de MLT + FFmpeg en Windows | PROTOTIPO: primer intento FALLÓ | Run #1 de *MLT feasibility* en rojo a los 34 s (commit adb081f), antes de renderizar; causa sin confirmar (probable nombre de paquete MSYS2 incorrecto; MINGW64 está obsoleto). Se reescribió para usar UCRT64 y guardar diagnóstico siempre |
+| Formato de proyecto, guardar y abrir (núcleo) | COMPLETA Y VERIFICADA (núcleo) | 143 comprobaciones en total, 0 fallos (GCC 13, Linux): ida y vuelta, archivos dañados, esquema futuro, solapes, ids duplicados, guardado atómico y detección de medios que faltan. Documentado en `docs/PROJECT_FORMAT.md`. Limitación: rutas absolutas, sin relocalización |
+| Botones Abrir/Guardar en la ventana | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Código escrito; se compilará en el próximo run de *Windows build* y hay que probarlo a mano |
 | Importación, biblioteca, vista previa | PENDIENTE | Fase 3 |
 | Motor multimedia (MLT/FFmpeg) | PENDIENTE | Viabilidad en Windows sin probar |
 | Exportación de video | PENDIENTE | Fase 3 |

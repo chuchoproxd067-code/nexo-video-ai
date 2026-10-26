@@ -2,8 +2,10 @@
 
 #include <QAction>
 #include <QDockWidget>
+#include <QFileDialog>
 #include <QLabel>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QStatusBar>
 #include <QToolBar>
 
@@ -31,6 +33,7 @@ nexo::Timeline demoTimeline() {
 }  // namespace
 
 MainWindow::MainWindow() : history_(demoTimeline()) {
+    project_.addMedia("demo.mp4");
     setWindowTitle(QString("NEXO VIDEO AI %1").arg(NEXO_VERSION));
     resize(1280, 760);
     setStyleSheet(QString(
@@ -42,6 +45,10 @@ MainWindow::MainWindow() : history_(demoTimeline()) {
 
     auto* tb = addToolBar("Principal");
     tb->setMovable(false);
+    auto* openA = tb->addAction("Abrir…");
+    auto* saveA = tb->addAction("Guardar");
+    auto* saveAsA = tb->addAction("Guardar como…");
+    tb->addSeparator();
     auto* split = tb->addAction("Dividir (demo)");
     auto* undo = tb->addAction("Deshacer");
     auto* redo = tb->addAction("Rehacer");
@@ -70,12 +77,55 @@ MainWindow::MainWindow() : history_(demoTimeline()) {
         statusBar()->showMessage(r.ok ? "Clip dividido" : QString::fromStdString(r.error), 4000);
         refresh();
     });
+    connect(openA, &QAction::triggered, this, [this] { open(); });
+    connect(saveA, &QAction::triggered, this, [this] { save(false); });
+    connect(saveAsA, &QAction::triggered, this, [this] { save(true); });
     connect(undo, &QAction::triggered, this, [this] { history_.undo(); refresh(); });
     connect(redo, &QAction::triggered, this, [this] { history_.redo(); refresh(); });
 
     statusBar()->showMessage(QString("Compilación %1 — editor en construcción (Fase 2)")
                                  .arg(NEXO_GIT_COMMIT));
     refresh();
+}
+
+void MainWindow::save(bool askPath) {
+    QString path = currentPath_;
+    if (askPath || path.isEmpty()) {
+        path = QFileDialog::getSaveFileName(this, "Guardar proyecto", currentPath_,
+                                            "Proyecto NEXO (*.nexo)");
+        if (path.isEmpty()) return;
+        if (!path.endsWith(".nexo", Qt::CaseInsensitive)) path += ".nexo";
+    }
+    project_.timeline = history_.timeline();
+    std::string err;
+    if (!nexo::saveProject(project_, path.toStdString(), err)) {
+        QMessageBox::warning(this, "No se pudo guardar", QString::fromStdString(err));
+        return;
+    }
+    currentPath_ = path;
+    statusBar()->showMessage("Proyecto guardado en " + path, 5000);
+}
+
+void MainWindow::open() {
+    const QString path = QFileDialog::getOpenFileName(this, "Abrir proyecto", currentPath_,
+                                                      "Proyecto NEXO (*.nexo)");
+    if (path.isEmpty()) return;
+    nexo::Project loaded;
+    std::string err;
+    if (!nexo::loadProject(path.toStdString(), loaded, err)) {
+        QMessageBox::warning(this, "No se pudo abrir", QString::fromStdString(err));
+        return;   // el proyecto actual no se toca
+    }
+    project_ = std::move(loaded);
+    history_ = nexo::History(project_.timeline);
+    currentPath_ = path;
+    refresh();
+    const auto missing = project_.missingMedia();
+    statusBar()->showMessage(
+        missing.empty() ? "Proyecto abierto"
+                        : QString("Proyecto abierto. Faltan %1 archivo(s) de medios (p. ej. %2)")
+                              .arg(missing.size())
+                              .arg(QString::fromStdString(missing.front())));
 }
 
 void MainWindow::refresh() {

@@ -43,6 +43,15 @@ void Timeline::sortTrack(std::size_t track) {
 }
 
 Result Timeline::addClip(std::size_t track, Clip clip) {
+    clip.id = nextId_;
+    Result r = insertClip(track, std::move(clip));
+    return r;
+}
+
+Result Timeline::insertClip(std::size_t track, Clip clip) {
+    if (clip.id == 0) return Result::failure("El clip necesita un identificador.");
+    Location existing;
+    if (find(clip.id, existing)) return Result::failure("El identificador de clip ya está en uso.");
     if (track >= tracks_.size()) return Result::failure("La pista no existe.");
     if (clip.duration <= 0) return Result::failure("La duración del clip debe ser mayor que 0.");
     if (clip.sourceIn < 0) return Result::failure("El punto de entrada no puede ser negativo.");
@@ -50,7 +59,7 @@ Result Timeline::addClip(std::size_t track, Clip clip) {
     if (clip.mediaPath.empty()) return Result::failure("El clip no tiene ruta de medio.");
     if (overlaps(track, clip.timelineStart, clip.timelineEnd(), 0))
         return Result::failure("El clip se solapa con otro en la pista.");
-    clip.id = nextId_++;
+    if (clip.id >= nextId_) nextId_ = clip.id + 1;
     tracks_[track].clips.push_back(clip);
     sortTrack(track);
     return Result::success(clip.id);

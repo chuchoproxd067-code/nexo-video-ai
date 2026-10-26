@@ -1,9 +1,13 @@
 // Pruebas unitarias del núcleo. Sin dependencias externas: cada CHECK que falla
 // se imprime y el programa termina con código distinto de 0.
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 #include "core/History.h"
+#include "core/Json.h"
+#include "core/Project.h"
 #include "core/Timeline.h"
 
 static int g_failures = 0;
@@ -157,6 +161,165 @@ static void testHistory() {
     CHECK(!h.undo());
 }
 
+static void testJson() {
+    json::Value v;
+    std::string err;
+    CHECK(json::parse(R"({"a":[1,2.5,-3e2,true,false,null],"s":"x\n\"\u00e1"})", v, err));
+    CHECK(v.isObject() && v.get("a") && v.get("a")->items().size() == 6);
+    CHECK(v.get("a")->items()[2].asNumber() == -300.0);
+    CHECK(v.get("s")->asString() == "x\n\"\xc3\xa1");
+    // Idas y vueltas
+    json::Value back;
+    CHECK(json::parse(v.dump(2), back, err) && back.dump(-1) == v.dump(-1));
+    // Entradas inválidas: todas deben fallar con mensaje, sin colgarse
+    const char* bad[] = {"", "{", "[1,]", "{\"a\":}", "tru", "01", "\"abc", "[1 2]",
+                         "{\"a\" 1}", "1 2", "\"\\x\"", "-", "[\"\\ud800\"]"};
+    for (const char* b : bad) {
+        json::Value x;
+        std::string e;
+        CHECK(!json::parse(b, x, e) && !e.empty());
+    }
+    std::string deep(200, '[');
+    json::Value x;
+    CHECK(!json::parse(deep, x, err));   // profundidad limitada
+}
+
+static Project sampleProject() {
+    Project p;
+    p.name = "Mi \"proyecto\" ñ";
+    Timeline tl({25, 1});
+    const auto v = tl.addTrack("V1", TrackKind::Video);
+    const auto a = tl.addTrack("A1", TrackKind::Audio);
+    tl.addClip(v, makeClip(0, 100, 10, "C:\\videos\\a.mp4"));
+    const ClipId second = tl.addClip(v, makeClip(150, 40, 0, "b.mp4")).clip;
+    tl.addClip(a, makeClip(0, 190, 0, "música.wav"));
+    tl.removeClip(second);                    // deja un hueco en la numeración de ids
+    tl.addClip(v, makeClip(200, 30, 5, "c.mp4"));
+    p.timeline = tl;
+    p.addMedia("C:\\videos\\a.mp4");
+    p.addMedia("C:\\videos\\a.mp4");          // duplicado ignorado
+    p.addMedia("b.mp4");
+    return p;
+}
+
+static void testProjectRoundTrip() {
+    Project p = sampleProject();
+    CHECK(p.media.size() == 2);
+    CHECK(!p.addMedia(""));
+    const std::string text = toJson(p);
+    Project q;
+    std::string err;
+    CHECK(fromJson(text, q, err));
+    CHECK(q.name == p.name);
+    CHECK(q.media == p.media);
+    CHECK(q.timeline.frameRate().num == 25);
+    CHECK(q.timeline.trackCount() == 2);
+    CHECK(q.timeline.track(0).clips.size() == 2);
+    CHECK(q.timeline.track(0).clips[0].id == p.timeline.track(0).clips[0].id);
+    CHECK(q.timeline.track(0).clips[1].id == p.timeline.track(0).clips[1].id);
+    CHECK(q.timeline.track(0).clips[0].sourceIn == 10);
+    CHECK(q.timeline.track(1).kind == TrackKind::Audio);
+    CHECK(q.timeline.track(1).clips[0].mediaPath == "música.wav");
+    CHECK(toJson(q) == text);                  // serialización estable
+    // Los ids no se reutilizan tras cargar: el siguiente clip recibe un id nuevo.
+    Result r = q.timeline.addClip(0, makeClip(300, 10));
+    CHECK(r.ok && r.clip > q.timeline.track(0).clips[1].id);
+}
+
+static void testProjectRejectsBadFiles() {
+    Project p = sampleProject();
+    const std::string good = toJson(p);
+    Project out;
+    std::string err;
+    auto replaceOnce = [&](const std::string& from, const std::string& to) {
+        std::string t = good;
+        const auto pos = t.find(from);
+        CHECK(pos != std::string::npos);
+        if (pos != std::string::npos) t.replace(pos, from.size(), to);
+        return t;
+    };
+    CHECK(!fromJson("[]", out, err));
+    CHECK(!fromJson("{}", out, err));
+    CHECK(!fromJson("no es json", out, err));
+    // Esquema futuro: se rechaza con un mensaje que lo explica
+    CHECK(!fromJson(replaceOnce("\"schema\": 1", "\"schema\": 99"), out, err));
+    CHECK(err.find("más nueva") != std::string::npos);
+    CHECK(!fromJson(replaceOnce("\"schema\": 1", "\"schema\": 0"), out, err));
+    // Valores inválidos
+    CHECK(!fromJson(replaceOnce("\"num\": 25", "\"num\": 0"), out, err));
+    CHECK(!fromJson(replaceOnce("\"duration\": 100", "\"duration\": -5"), out, err));
+    CHECK(!fromJson(replaceOnce("\"duration\": 100", "\"duration\": 1.5"), out, err));
+    CHECK(!fromJson(replaceOnce("\"kind\": \"video\"", "\"kind\": \"otro\""), out, err));
+    // Solape entre clips de la misma pista (start 0 dur 100 y start 200 -> mover a 50)
+    CHECK(!fromJson(replaceOnce("\"start\": 200", "\"start\": 50"), out, err));
+    // Ids duplicados
+    {
+        Project d = sampleProject();
+        const ClipId id0 = d.timeline.track(0).clips[0].id;
+        const std::string t = toJson(d);
+        const std::string needle = "\"id\": " + std::to_string(d.timeline.track(1).clips[0].id);
+        const std::string repl = "\"id\": " + std::to_string(id0);
+        std::string t2 = t;
+        t2.replace(t2.find(needle), needle.size(), repl);
+        CHECK(!fromJson(t2, out, err));
+    }
+    // Un fallo no toca el proyecto de salida
+    Project keep = sampleProject();
+    CHECK(!fromJson("{}", keep, err));
+    CHECK(keep.timeline.trackCount() == 2);
+}
+
+static void testProjectFiles() {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "nexo_test_project";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    const std::string file = (dir / "p.nexo").string();
+
+    Project p = sampleProject();
+    std::string err;
+    CHECK(saveProject(p, file, err));
+    CHECK(!fs::exists(file + ".tmp"));
+    Project q;
+    CHECK(loadProject(file, q, err));
+    CHECK(toJson(q) == toJson(p));
+
+    // Sobrescribir un proyecto existente
+    p.name = "Segunda versión";
+    CHECK(saveProject(p, file, err));
+    CHECK(loadProject(file, q, err) && q.name == "Segunda versión");
+
+    // Archivo inexistente y directorio inexistente
+    CHECK(!loadProject((dir / "no_existe.nexo").string(), q, err) && !err.empty());
+    CHECK(!saveProject(p, (dir / "no" / "hay" / "p.nexo").string(), err) && !err.empty());
+    CHECK(!saveProject(p, "", err));
+
+    // Archivo truncado/dañado
+    {
+        std::ofstream f(dir / "roto.nexo", std::ios::binary);
+        f << toJson(p).substr(0, 60);
+    }
+    CHECK(!loadProject((dir / "roto.nexo").string(), q, err));
+
+    // Detección de medios que faltan
+    Project m;
+    Timeline tl({30, 1});
+    const auto v = tl.addTrack("V1", TrackKind::Video);
+    const std::string real = (dir / "real.mp4").string();
+    { std::ofstream f(real, std::ios::binary); f << "x"; }
+    tl.addClip(v, makeClip(0, 10, 0, real.c_str()));
+    tl.addClip(v, makeClip(10, 10, 0, (dir / "falta.mp4").string().c_str()));
+    m.timeline = tl;
+    m.addMedia(real);
+    m.addMedia((dir / "falta.mp4").string());     // también está en un clip: no se repite
+    m.addMedia((dir / "otra_falta.mov").string());
+    const auto missing = m.missingMedia();
+    CHECK(missing.size() == 2);
+    CHECK(missing.size() == 2 && missing[0] == (dir / "falta.mp4").string());
+    CHECK(missing.size() == 2 && missing[1] == (dir / "otra_falta.mov").string());
+    fs::remove_all(dir);
+}
+
 int main() {
     testTimecode();
     testAddAndOverlap();
@@ -164,6 +327,10 @@ int main() {
     testTrim();
     testMove();
     testHistory();
+    testJson();
+    testProjectRoundTrip();
+    testProjectRejectsBadFiles();
+    testProjectFiles();
     std::printf("%d comprobaciones, %d fallos\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

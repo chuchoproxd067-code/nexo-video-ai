@@ -59,6 +59,9 @@ public:
 
     // Operaciones de edición. Ninguna modifica el estado si devuelve error.
     Result addClip(std::size_t track, Clip clip);
+    // Inserta conservando el id del clip (para cargar proyectos guardados).
+    // El id debe ser > 0 y no estar en uso.
+    Result insertClip(std::size_t track, Clip clip);
     Result moveClip(ClipId id, std::size_t toTrack, Frame newStart);
     // Mueve el borde izquierdo (delta>0 acorta, delta<0 alarga si hay material y espacio).
     Result trimStart(ClipId id, Frame delta);
