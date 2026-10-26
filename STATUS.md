@@ -7,8 +7,9 @@ Fase actual: **2 — Base y compilación remota** (en curso).
 | Modelo de línea de tiempo (añadir, mover, recortar, dividir, eliminar) | COMPLETA Y VERIFICADA (solo el modelo) | `tests/core_tests.cpp`: 75 comprobaciones, 0 fallos, compilado con GCC 13 en Linux |
 | Deshacer/rehacer | COMPLETA Y VERIFICADA (modelo) | Mismas pruebas |
 | Conversión de tiempos | COMPLETA Y VERIFICADA | Mismas pruebas; sin drop-frame |
-| Ventana Qt con línea de tiempo de demostración | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Código escrito; **no compilado todavía** (no hay Qt en el entorno de desarrollo) |
-| Workflow de Windows | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | **Nunca ejecutado.** Hay que lanzarlo desde GitHub |
+| Ventana Qt con línea de tiempo de demostración | PARCIAL: compila y empaqueta | Run #1 de *Windows build* en verde (commit 7b2298b): compila con MSVC y Qt 6.8, pasa `ctest`, el ZIP empaquetado arranca con `--version`. **Pendiente:** confirmar a mano que la ventana se ve y funciona |
+| Workflow de Windows | COMPLETA Y VERIFICADA (primera versión) | Run #1: éxito en 2 min 10 s; artefacto de 45,9 MB. Aviso de GitHub: Node.js 20 obsoleto en `checkout@v4`, `upload-artifact@v4` y `msvc-dev-cmd@v1` (sin efecto por ahora) |
+| Viabilidad de MLT + FFmpeg en Windows | PROTOTIPO (workflow escrito, sin ejecutar) | `.github/workflows/mlt-feasibility.yml`; aún no lanzado |
 | Importación, biblioteca, vista previa | PENDIENTE | Fase 3 |
 | Motor multimedia (MLT/FFmpeg) | PENDIENTE | Viabilidad en Windows sin probar |
 | Exportación de video | PENDIENTE | Fase 3 |
@@ -20,4 +21,4 @@ Fase actual: **2 — Base y compilación remota** (en curso).
 - Las acciones de GitHub usan versiones por etiqueta mayor (`@v4`); conviene fijarlas por SHA antes de la Fase 7.
 
 ## Próxima tarea
-Ejecutar *Windows build* en GitHub, corregir lo que falle y confirmar que el ZIP arranca. Después: prueba de viabilidad de MLT + FFmpeg en el runner.
+Lanzar *MLT feasibility (Windows)* y leer su evidencia (MP4 de 75 fotogramas, licencias, capacidades). Con el resultado, decidir la cadena de herramientas (MinGW/MSYS2 para todo, o MSVC para la interfaz y MinGW para MLT) y registrarlo en `DECISIONS/`.

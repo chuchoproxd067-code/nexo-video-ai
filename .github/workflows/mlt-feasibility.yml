@@ -1,0 +1,75 @@
+name: MLT feasibility (Windows)
+
+# Prueba de viabilidad de la Fase 1/2: ¿MLT + FFmpeg pueden renderizar un MP4 real
+# en un ejecutor Windows? Usa los paquetes de MSYS2 (MinGW-w64), igual que la ruta
+# documentada por Kdenlive. No forma parte del producto: solo produce evidencia.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/mlt-feasibility.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  mlt:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-mlt
+            mingw-w64-x86_64-ffmpeg
+
+      - name: Versions and licensing evidence
+        run: |
+          mkdir -p evidence
+          {
+            echo "== paquetes =="
+            pacman -Q mingw-w64-x86_64-mlt mingw-w64-x86_64-ffmpeg
+            echo
+            echo "== licencias declaradas por pacman =="
+            pacman -Qi mingw-w64-x86_64-mlt mingw-w64-x86_64-ffmpeg | grep -E "^(Name|Version|Licenses)"
+            echo
+            echo "== ffmpeg: configuración (busca --enable-gpl / --enable-nonfree) =="
+            ffmpeg -hide_banner -version | grep -E "^(ffmpeg version|configuration)"
+          } | tee evidence/versions.txt
+
+      - name: MLT capabilities
+        run: |
+          melt -query consumers  > evidence/consumers.txt 2>&1 || true
+          melt -query producers  > evidence/producers.txt 2>&1 || true
+          melt -query filters    > evidence/filters.txt   2>&1 || true
+          grep -c . evidence/consumers.txt evidence/producers.txt evidence/filters.txt
+
+      - name: Render a real MP4 with MLT
+        run: |
+          # 75 fotogramas (3 s a 25 fps) de color sólido, codificados con libx264.
+          melt color:blue out=74 -consumer avformat:evidence/test.mp4 vcodec=libx264 an=1 2>&1 | tee evidence/melt-render.log
+          ls -l evidence/test.mp4
+
+      - name: Verify the exported file
+        run: |
+          test -s evidence/test.mp4
+          ffprobe -v error -count_frames -select_streams v:0 \
+            -show_entries stream=codec_name,width,height,nb_read_frames \
+            -of default=nw=1 evidence/test.mp4 | tee evidence/ffprobe.txt
+          grep -q "nb_read_frames=75" evidence/ffprobe.txt
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlt-feasibility-evidence
+          path: evidence/
+          retention-days: 14
