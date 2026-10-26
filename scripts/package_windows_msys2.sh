@@ -39,17 +39,22 @@ cp -r "$MLTMOD"  "$OUT/lib/mlt"
 cp -r "$MLTDATA" "$OUT/share/mlt"
 
 # --- DLL de las que depende todo lo anterior -------------------------------
+# OJO: se usan arreglos y `< /dev/null` porque ldd lee la entrada estándar y, dentro
+# de un `while read` alimentado por find, se comía la lista de archivos tras el primero.
 for pass in $(seq 1 12); do
   added=0
-  while IFS= read -r f; do
-    while IFS= read -r dep; do
+  mapfile -t files < <(find "$OUT" -type f \( -name '*.dll' -o -name '*.exe' \))
+  for f in "${files[@]}"; do
+    mapfile -t deps < <(ldd "$f" < /dev/null 2>/dev/null | awk '/=>/ {print $3}' | grep -i "^$PREFIX/" || true)
+    for dep in "${deps[@]}"; do
+      [ -n "$dep" ] || continue
       base="$(basename "$dep")"
       if [ ! -f "$OUT/$base" ]; then
         cp "$dep" "$OUT/"
         added=$((added + 1))
       fi
-    done < <(ldd "$f" 2>/dev/null | awk '/=>/ {print $3}' | grep -i "^$PREFIX/" || true)
-  done < <(find "$OUT" -type f \( -name '*.dll' -o -name '*.exe' \))
+    done
+  done
   echo "pasada $pass: $added DLL nuevas"
   [ "$added" -eq 0 ] && break
 done

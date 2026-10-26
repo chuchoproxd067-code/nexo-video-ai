@@ -99,8 +99,8 @@ jobs:
         run: |
           cd dist/NEXO-VIDEO-AI
           missing=""
-          for f in nexo-video-ai.exe melt.exe $(find lib -name '*.dll' | head -60) $(find platforms -name '*.dll'); do
-            m=$(PATH=/c/Windows/System32:/usr/bin ldd "$f" 2>/dev/null | grep -i "not found" | tr -s ' ' | tr '\n' ';' || true)
+          for f in nexo-video-ai.exe melt.exe $(find lib -name '*.dll') $(find platforms -name '*.dll'); do
+            m=$(PATH=/c/Windows/System32:/usr/bin ldd "$f" < /dev/null 2>/dev/null | grep -i "not found" | grep -v -i "api-ms-win-" | tr -s ' ' | tr '\n' ';' || true)
             [ -n "$m" ] && missing="$missing $f => $m |"
           done
           if [ -n "$missing" ]; then echo "::error title=DLL que faltan en el paquete::${missing}"; else echo "Sin DLL faltantes según ldd"; fi
