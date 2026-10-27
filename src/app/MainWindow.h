@@ -1,5 +1,6 @@
 #pragma once
 #include <QHash>
+#include <QImage>
 #include <QMainWindow>
 #include <QString>
 #include <QStringList>
@@ -10,6 +11,8 @@
 
 class Exporter;
 class MediaImporter;
+class Previewer;
+class QLabel;
 class QListWidget;
 class QListWidgetItem;
 class QProgressDialog;
@@ -20,8 +23,13 @@ class MainWindow : public QMainWindow {
 public:
     MainWindow();
 
+protected:
+    void resizeEvent(QResizeEvent*) override;
+
 private:
     void refresh();
+    void requestPreview();
+    void showFrame();
     void save(bool askPath);
     void open();
     void importMedia();
@@ -40,6 +48,9 @@ private:
     QListWidget* library_ = nullptr;
     MediaImporter* importer_ = nullptr;
     Exporter* exporter_ = nullptr;
+    Previewer* previewer_ = nullptr;
+    QLabel* viewer_ = nullptr;
+    QImage frame_;
     QProgressDialog* progress_ = nullptr;
     QHash<QString, nexo::MediaInfo> info_;
     QStringList importErrors_;

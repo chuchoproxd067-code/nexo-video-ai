@@ -12,13 +12,17 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QMessageBox>
+#include <QPixmap>
 #include <QProgressDialog>
+#include <QSizePolicy>
+#include <QResizeEvent>
 #include <QStatusBar>
 #include <QToolBar>
 
 #include "BuildInfo.h"
 #include "Exporter.h"
 #include "MediaImporter.h"
+#include "Previewer.h"
 #include "Theme.h"
 #include "TimelineWidget.h"
 
@@ -57,6 +61,7 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
 
     importer_ = new MediaImporter(this);
     exporter_ = new Exporter(this);
+    previewer_ = new Previewer(this);
     importer_->setProjectFps(history_.timeline().frameRate());
 
     auto* tb = addToolBar("Principal");
@@ -81,12 +86,13 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
     libraryDock->setWidget(library_);
     addDockWidget(Qt::LeftDockWidgetArea, libraryDock);
 
-    auto* viewer = new QLabel(importer_->available()
-                                  ? "Visor: la vista previa llega en la siguiente fase.\n\n"
-                                    "Importa medios, añádelos a la línea de tiempo (doble clic en la biblioteca) y exporta."
+    viewer_ = new QLabel(importer_->available()
+                                  ? "Importa medios, añádelos a la línea de tiempo (doble clic en la biblioteca) y exporta."
                                   : "Esta compilación no incluye melt: no se pueden leer medios ni exportar.");
-    viewer->setAlignment(Qt::AlignCenter);
-    setCentralWidget(viewer);
+    viewer_->setAlignment(Qt::AlignCenter);
+    viewer_->setMinimumSize(320, 180);
+    viewer_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    setCentralWidget(viewer_);
 
     auto* tlDock = new QDockWidget("Línea de tiempo", this);
     timeline_ = new TimelineWidget;
@@ -121,6 +127,15 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
     connect(undo, &QAction::triggered, this, [this] { history_.undo(); refresh(); });
     connect(redo, &QAction::triggered, this, [this] { history_.redo(); refresh(); });
 
+    connect(timeline_, &TimelineWidget::playheadChanged, this, [this](nexo::Frame) { requestPreview(); });
+    connect(previewer_, &Previewer::ready, this, [this](const QImage& img, nexo::Frame) {
+        frame_ = img;
+        if (img.isNull()) viewer_->setText("Línea de tiempo vacía");
+        else showFrame();
+    });
+    connect(previewer_, &Previewer::failed, this, [this](const QString& msg) {
+        statusBar()->showMessage("Vista previa: " + msg.section('\n', 0, 0), 6000);
+    });
     connect(importer_, &MediaImporter::probed, this, &MainWindow::onProbed);
     connect(importer_, &MediaImporter::failed, this, &MainWindow::onProbeFailed);
     connect(importer_, &MediaImporter::idle, this, [this] {
@@ -344,4 +359,21 @@ void MainWindow::open() {
 
 void MainWindow::refresh() {
     timeline_->setTimeline(history_.timeline());
+    requestPreview();
+}
+
+void MainWindow::requestPreview() {
+    if (!previewer_->available()) return;
+    if (history_.timeline().duration() <= 0) { frame_ = QImage(); viewer_->setPixmap(QPixmap()); viewer_->setText("Línea de tiempo vacía: importa medios y añádelos."); return; }
+    previewer_->request(history_.timeline(), timeline_->playhead());
+}
+
+void MainWindow::showFrame() {
+    if (frame_.isNull()) return;
+    viewer_->setPixmap(QPixmap::fromImage(frame_).scaled(viewer_->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+}
+
+void MainWindow::resizeEvent(QResizeEvent* e) {
+    QMainWindow::resizeEvent(e);
+    showFrame();
 }

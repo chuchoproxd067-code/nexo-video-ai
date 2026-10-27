@@ -13,6 +13,8 @@ qt_add_executable(nexo-video-ai WIN32
   MediaImporter.h
   Exporter.cpp
   Exporter.h
+  Previewer.cpp
+  Previewer.h
   TimelineWidget.cpp
   TimelineWidget.h
   Theme.h

@@ -105,6 +105,17 @@ jobs:
           chk pic.png "kind=image" "width=320" "height=240" "frames=150" || rc=1
           exit $rc
 
+      # La vista previa de la app pide un fotograma suelto a melt como PNG.
+      - name: Render single preview frame with melt
+        shell: msys2 {0}
+        run: |
+          build/tests/mlt_xml_tool evidence/proj_abs.mlt "$(pwd -W)/evidence/clipA.mp4" "$(pwd -W)/evidence/clipB.mp4" > /dev/null
+          melt evidence/proj_abs.mlt in=45 out=45 -consumer avformat:evidence/frame45.png vcodec=png > evidence/frame.log 2>&1 || true
+          ls -l evidence/frame45.png
+          info="$(ffprobe -v error -count_frames -show_entries stream=codec_name,width,height,nb_read_frames -of default=nw=1 evidence/frame45.png | tr '\n' ' ')"
+          echo "::notice title=Fotograma de vista previa::$info"
+          echo "$info" | grep -q "width=640" && echo "$info" | grep -q "height=360"
+
       - name: Capture melt progress output format
         continue-on-error: true
         shell: msys2 {0}
