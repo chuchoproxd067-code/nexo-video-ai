@@ -92,7 +92,7 @@ jobs:
         shell: msys2 {0}
         run: |
           scripts/package_windows_msys2.sh build/src/app/nexo-video-ai.exe dist/NEXO-VIDEO-AI 2>&1 | tee evidence/package.log
-          om="$(grep OMITIDO evidence/package.log | tr '\n' '|')"
+          om="$(grep OMITIDO evidence/package.log | tr '\n' '|' || true)"
           if [ -n "$om" ]; then echo "::warning title=Módulos de MLT omitidos del paquete::$om"; else echo "::notice title=Módulos de MLT::ninguno omitido"; fi
           {
             echo "NEXO VIDEO AI"
