@@ -7,6 +7,12 @@ qt_add_executable(nexo-video-ai WIN32
   main.cpp
   MainWindow.cpp
   MainWindow.h
+  MeltRunner.cpp
+  MeltRunner.h
+  MediaImporter.cpp
+  MediaImporter.h
+  Exporter.cpp
+  Exporter.h
   TimelineWidget.cpp
   TimelineWidget.h
   Theme.h

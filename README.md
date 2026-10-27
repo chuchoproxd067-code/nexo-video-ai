@@ -2,7 +2,7 @@
 
 Editor de video de escritorio para Windows con asistente de IA (en desarrollo).
 
-> **Estado real:** base técnica. Hay un modelo de línea de tiempo con deshacer/rehacer, guardado de proyectos, un generador de MLT XML verificado con un render real, y una ventana Qt de demostración. **Todavía no hay importación, reproducción ni botón de exportar.** Ver [STATUS.md](STATUS.md).
+> **Estado real:** base técnica. Hay un modelo de línea de tiempo con deshacer/rehacer, guardado de proyectos, un generador de MLT XML verificado con un render real, y una ventana Qt de demostración. **Importar y exportar están escritos pero aún sin probar a mano; no hay vista previa ni reproducción.** Ver [STATUS.md](STATUS.md).
 
 ## Descargar una compilación
 

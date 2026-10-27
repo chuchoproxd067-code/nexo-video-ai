@@ -7,6 +7,7 @@
 
 #include "core/History.h"
 #include "core/Json.h"
+#include "core/MediaProbe.h"
 #include "core/MltXml.h"
 #include "core/Project.h"
 #include "core/Timeline.h"
@@ -362,6 +363,71 @@ static void testMltXml() {
     CHECK(!buildMltXml(tl, zero).ok);
 }
 
+// Los <producer> son los que devolvió MLT 7.42 en CI (resumidos); la línea <profile> se
+// reconstruyó con el formato habitual del consumidor xml y se contrasta en CI con la real.
+static const char* kProfile30 =
+    "<mlt><profile description=\"x\" width=\"640\" height=\"360\" progressive=\"1\" "
+    "frame_rate_num=\"30\" frame_rate_den=\"1\" colorspace=\"601\"/>\n";
+static const char* kProfile25 =
+    "<mlt><profile description=\"PAL\" width=\"720\" height=\"576\" "
+    "frame_rate_num=\"25\" frame_rate_den=\"1\"/>\n";
+
+static std::string videoXml() {
+    return std::string(kProfile30) +
+        "<producer id=\"producer0\" in=\"0\" out=\"0\">\n"
+        "<property name=\"length\">120</property>\n"
+        "<property name=\"resource\">C:/a &amp; b/clip.mp4</property>\n"
+        "<property name=\"meta.media.nb_streams\">2</property>\n"
+        "<property name=\"meta.media.0.codec.width\">640</property>\n"
+        "<property name=\"meta.media.0.codec.height\">360</property>\n"
+        "<property name=\"audio_index\">1</property>\n"
+        "<property name=\"video_index\">0</property>\n"
+        "<property name=\"mlt_service\">avformat</property>\n"
+        "</producer></mlt>";
+}
+
+static void testMediaProbe() {
+    const FrameRate p30{30, 1};
+    ProbeResult v = parseMeltProbeXml(videoXml(), p30);
+    CHECK(v.ok && v.info.kind == MediaKind::Video);
+    CHECK(v.info.frames == 120 && v.info.width == 640 && v.info.height == 360);
+    CHECK(v.info.hasVideo && v.info.hasAudio);
+    CHECK(v.info.seconds > 3.999 && v.info.seconds < 4.001);
+    // Mismo medio con otro fps de proyecto: se conserva la duración en segundos.
+    ProbeResult v24 = parseMeltProbeXml(videoXml(), FrameRate{24, 1});
+    CHECK(v24.ok && v24.info.frames == 96);
+
+    // Audio puro: melt usó PAL (25 fps); 50 fotogramas = 2 s = 60 fotogramas a 30 fps.
+    const std::string audio = std::string(kProfile25) +
+        "<producer id=\"producer0\" in=\"0\" out=\"0\"><property name=\"length\">50</property>"
+        "<property name=\"audio_index\">0</property><property name=\"video_index\">-1</property>"
+        "<property name=\"mlt_service\">avformat</property></producer></mlt>";
+    ProbeResult a = parseMeltProbeXml(audio, p30);
+    CHECK(a.ok && a.info.kind == MediaKind::Audio && a.info.frames == 60);
+    CHECK(!a.info.hasVideo && a.info.hasAudio && a.info.width == 0);
+
+    // Imagen: length no es una duración útil; se usan 5 s.
+    const std::string image = std::string(kProfile25) +
+        "<producer id=\"producer0\" in=\"0\" out=\"0\"><property name=\"length\">15000</property>"
+        "<property name=\"meta.media.width\">320</property><property name=\"meta.media.height\">240</property>"
+        "<property name=\"mlt_service\">qimage</property></producer></mlt>";
+    ProbeResult im = parseMeltProbeXml(image, p30);
+    CHECK(im.ok && im.info.kind == MediaKind::Image && im.info.frames == 150);
+    CHECK(im.info.width == 320 && im.info.height == 240);
+
+    // Casos de error, todos con mensaje
+    CHECK(!parseMeltProbeXml("", p30).ok);
+    CHECK(!parseMeltProbeXml("basura", p30).ok);
+    CHECK(!parseMeltProbeXml("<mlt></mlt>", p30).ok);
+    CHECK(!parseMeltProbeXml(std::string(kProfile30) + "</mlt>", p30).ok);                 // sin producer
+    CHECK(!parseMeltProbeXml("<mlt><producer><property name=\"length\">5</property></producer></mlt>", p30).ok);  // sin perfil
+    CHECK(!parseMeltProbeXml(std::string(kProfile30) + "<producer><property name=\"length\">5</property></producer></mlt>", p30).ok);  // sin streams
+    std::string zero = videoXml();
+    zero.replace(zero.find(">120<"), 5, ">0<");
+    CHECK(!parseMeltProbeXml(zero, p30).ok);
+    CHECK(!parseMeltProbeXml(videoXml(), FrameRate{0, 1}).ok);
+}
+
 int main() {
     testTimecode();
     testAddAndOverlap();
@@ -374,6 +440,7 @@ int main() {
     testProjectRejectsBadFiles();
     testProjectFiles();
     testMltXml();
+    testMediaProbe();
     std::printf("%d comprobaciones, %d fallos\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

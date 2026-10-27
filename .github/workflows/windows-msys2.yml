@@ -87,6 +87,32 @@ jobs:
             echo "::notice title=Probe $f::${body:0:3800}"
           done
 
+      # Comprueba que el lector de medios de NEXO entiende la salida REAL de melt.
+      - name: Check NEXO media probe against real melt output
+        shell: msys2 {0}
+        run: |
+          grep -m1 '<profile' evidence/probe_clipA.mp4.mlt | cut -c1-300 | sed 's/^/profile: /' | tee evidence/profile_line.txt
+          echo "::notice title=Linea profile real::$(cat evidence/profile_line.txt)"
+          chk() { # archivo, patrones...
+            f="$1"; shift
+            out="$(build/tests/probe_tool "evidence/probe_$f.mlt" 30 1)"; echo "$f -> $out"
+            echo "::notice title=probe_tool $f::$out"
+            for pat in "$@"; do echo "$out" | grep -q "$pat" || { echo "::error title=probe_tool $f::falta '$pat' en: $out"; return 1; }; done
+          }
+          rc=0
+          chk clipA.mp4 "kind=video" "frames=120" "width=640" "height=360" "video=1" "audio=1" || rc=1
+          chk tone.wav "kind=audio" "frames=60" "video=0" "audio=1" || rc=1
+          chk pic.png "kind=image" "width=320" "height=240" "frames=150" || rc=1
+          exit $rc
+
+      - name: Capture melt progress output format
+        continue-on-error: true
+        shell: msys2 {0}
+        run: |
+          melt evidence/proj.mlt -progress2 -consumer avformat:evidence/out_progress.mp4 vcodec=libx264 acodec=aac > /dev/null 2> evidence/progress2.log || true
+          sample="$(tr '\r' '\n' < evidence/progress2.log | grep -v -i 'ladspa\|lv2\|vst' | head -n 6 | cut -c1-120 | tr '\n' '|')"
+          echo "::notice title=melt -progress2 real::${sample:0:1500}"
+
       - name: Render NEXO timeline with melt (MSYS2 install)
         shell: msys2 {0}
         run: melt evidence/proj.mlt -consumer avformat:evidence/out_msys.mp4 vcodec=libx264 acodec=aac 2>&1 | tee evidence/melt-msys.log
