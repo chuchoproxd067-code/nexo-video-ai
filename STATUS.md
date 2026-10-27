@@ -14,6 +14,7 @@ Fase actual: **2 — Base y compilación remota** (en curso).
 | Botones Abrir/Guardar en la ventana | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Compila en Windows (*Windows build* en verde en ec2f8b7); falta probarlo a mano |
 | Lector de medios (núcleo: `MediaProbe`) | COMPLETA Y VERIFICADA (parser) | 176 comprobaciones en total, 0 fallos; el CI lo contrasta con la salida real de `melt` (video, audio, imagen). Ver el resultado de la ejecución en el commit correspondiente |
 | Importación y biblioteca en la ventana | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Código escrito (`MediaImporter`, `MainWindow`); falta confirmar que compila en CI y probarlo a mano |
+| Seleccionar clip, cursor, dividir en el cursor, eliminar (ventana) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Usa las operaciones del núcleo ya probadas, con deshacer; falta probar a mano |
 | Vista previa / reproducción | PENDIENTE | Fase 3 |
 | Generador de MLT XML (línea de tiempo → render con `melt`) | COMPLETA Y VERIFICADA (render básico) | 159 comprobaciones en Linux + render real en CI: 2 clips de video en secuencia y un clip de audio en otra pista (mezcla y composición). Sin probar: transiciones, efectos, imágenes, clips con velocidad distinta, resoluciones distintas a la del proyecto |
 | Paquete de Windows con MSYS2 (`bin/`, `lib/mlt`, `share/mlt`) | PARCIAL | Se compila, empaqueta y arranca en CI sin MSYS2 (`--version`). **El propietario aún no ha abierto este ZIP a mano.** Tamaño y tiempo de compilación sin medir |

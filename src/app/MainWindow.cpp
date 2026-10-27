@@ -8,6 +8,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QInputDialog>
+#include <QKeySequence>
 #include <QLabel>
 #include <QListWidget>
 #include <QMessageBox>
@@ -68,7 +69,10 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
     auto* addA = tb->addAction("Añadir a la línea de tiempo");
     auto* exportA = tb->addAction("Exportar…");
     tb->addSeparator();
-    auto* split = tb->addAction("Dividir el primer clip por la mitad");
+    auto* split = tb->addAction("Dividir en el cursor");
+    auto* del = tb->addAction("Eliminar clip");
+    del->setShortcut(QKeySequence::Delete);
+    split->setShortcut(Qt::Key_S);
     auto* undo = tb->addAction("Deshacer");
     auto* redo = tb->addAction("Rehacer");
 
@@ -100,15 +104,18 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
     connect(library_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* it) { addToTimeline(it); });
     connect(exportA, &QAction::triggered, this, [this] { exportVideo(); });
     connect(split, &QAction::triggered, this, [this] {
-        const int vt = findTrack(history_.timeline(), nexo::TrackKind::Video);
-        if (vt < 0 || history_.timeline().track(std::size_t(vt)).clips.empty()) {
-            statusBar()->showMessage("No hay clips que dividir.", 4000);
-            return;
-        }
-        const nexo::Clip first = history_.timeline().track(std::size_t(vt)).clips.front();
-        const nexo::Frame at = first.timelineStart + first.duration / 2;
-        const auto r = history_.apply("Dividir", [&](nexo::Timeline& t) { return t.splitClip(first.id, at); });
-        statusBar()->showMessage(r.ok ? "Clip dividido" : QString::fromStdString(r.error), 4000);
+        const nexo::ClipId id = timeline_->selectedClip();
+        if (id == 0) { statusBar()->showMessage("Selecciona un clip (clic) y coloca el cursor donde dividir.", 5000); return; }
+        const nexo::Frame at = timeline_->playhead();
+        const auto r = history_.apply("Dividir", [&](nexo::Timeline& t) { return t.splitClip(id, at); });
+        statusBar()->showMessage(r.ok ? "Clip dividido" : QString::fromStdString(r.error), 5000);
+        refresh();
+    });
+    connect(del, &QAction::triggered, this, [this] {
+        const nexo::ClipId id = timeline_->selectedClip();
+        if (id == 0) { statusBar()->showMessage("Selecciona un clip para eliminarlo.", 4000); return; }
+        const auto r = history_.apply("Eliminar clip", [&](nexo::Timeline& t) { return t.removeClip(id); });
+        statusBar()->showMessage(r.ok ? "Clip eliminado" : QString::fromStdString(r.error), 4000);
         refresh();
     });
     connect(undo, &QAction::triggered, this, [this] { history_.undo(); refresh(); });
