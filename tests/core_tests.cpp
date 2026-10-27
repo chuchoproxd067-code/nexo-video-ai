@@ -491,6 +491,85 @@ static void testClipFx() {
     CHECK(fromJson(toJson(plainP), q2, err) && q2.timeline.track(0).clips[0].volume == 1.0);
 }
 
+static void testTransitions() {
+    Timeline tl({30, 1});
+    const auto v = tl.addTrack("V1", TrackKind::Video);
+    const ClipId a = tl.addClip(v, makeClip(0, 60, 0, "a.mp4")).clip;
+    const ClipId b = tl.addClip(v, makeClip(60, 60, 0, "b.mp4")).clip;
+    const ClipId c = tl.addClip(v, makeClip(120, 60, 0, "c.mp4")).clip;
+    CHECK(!tl.setTransition(a, 10).ok);                    // el primero no tiene anterior
+    CHECK(!tl.setTransition(b, 61).ok);                    // más larga que el clip anterior
+    CHECK(!tl.setTransition(b, -1).ok);
+    CHECK(tl.duration() == 180);
+    CHECK(tl.setTransition(b, 20).ok);
+    CHECK(tl.track(v).clips[1].timelineStart == 40 && tl.track(v).clips[1].transitionIn == 20);
+    CHECK(tl.track(v).clips[2].timelineStart == 100);      // el siguiente se desplaza
+    CHECK(tl.duration() == 160);                           // 180 - 20
+    CHECK(tl.validate().empty());
+
+    // Operaciones protegidas.
+    CHECK(!tl.moveClip(b, v, 300).ok);
+    CHECK(!tl.trimStart(b, 5).ok);
+    CHECK(!tl.trimEnd(a, -5).ok);
+    CHECK(!tl.trimEnd(a, 5).ok);
+    CHECK(!tl.addClip(v, makeClip(50, 20, 0, "x.mp4")).ok);   // no se puede apilar sobre la zona de mezcla
+    {   // dividir dentro de la zona de mezcla: error y nada cambia
+        Timeline t2 = tl;
+        CHECK(!t2.splitClip(b, 45).ok);
+        CHECK(t2.track(v).clips.size() == 3 && t2.track(v).clips[1].duration == 60 && t2.validate().empty());
+    }
+    {   // dividir fuera de la zona: la transición se queda a la izquierda
+        Timeline t2 = tl;
+        CHECK(t2.splitClip(b, 70).ok);
+        CHECK(t2.track(v).clips.size() == 4 && t2.track(v).clips[1].transitionIn == 20 && t2.track(v).clips[2].transitionIn == 0);
+        CHECK(t2.validate().empty());
+    }
+    {   // eliminar el clip anterior quita la transición del siguiente
+        Timeline t2 = tl;
+        CHECK(t2.removeClip(a).ok);
+        CHECK(t2.track(v).clips[0].transitionIn == 0 && t2.validate().empty());
+    }
+    {   // transición encadenada: B-C también
+        Timeline t2 = tl;
+        CHECK(t2.setTransition(c, 30).ok);
+        CHECK(t2.validate().empty());
+        CHECK(!t2.setTransition(c, 45).ok);                // B (60) no da para 20 + 45
+        CHECK(t2.track(v).clips[2].transitionIn == 30);    // sin cambios tras el error
+    }
+
+    // XML: A sin su cola, zona de mezcla, B sin su cabeza.
+    ExportSettings st; st.width = 640; st.height = 360;
+    const XmlResult r = buildMltXml(tl, st);
+    CHECK(r.ok);
+    CHECK(contains(r.xml, "<tractor id=\"main\" in=\"0\" out=\"159\">"));
+    CHECK(contains(r.xml, "<entry producer=\"clip_1\" in=\"0\" out=\"39\"/>"));       // A: 60 - 20
+    CHECK(contains(r.xml, "<entry producer=\"mix_2\" in=\"0\" out=\"19\"/>"));
+    CHECK(contains(r.xml, "<entry producer=\"clip_2\" in=\"20\" out=\"59\"/>"));      // B tras la mezcla
+    CHECK(contains(r.xml, "<entry producer=\"clip_1\" in=\"40\" out=\"59\"/>"));      // cola de A en la mezcla
+    CHECK(contains(r.xml, ">luma<"));
+    CHECK(!contains(r.xml, "<blank"));                                               // sin huecos
+
+    // Quitarla restablece las posiciones.
+    CHECK(tl.setTransition(b, 0).ok);
+    CHECK(tl.track(v).clips[1].timelineStart == 60 && tl.track(v).clips[2].timelineStart == 120 && tl.duration() == 180);
+
+    // Proyecto: ida y vuelta.
+    Timeline t3 = tl;
+    t3.setTransition(b, 15);
+    Project p; p.timeline = t3;
+    Project q; std::string err;
+    CHECK(fromJson(toJson(p), q, err));
+    CHECK(q.timeline.track(v).clips[1].transitionIn == 15 && q.timeline.track(v).clips[1].timelineStart == 45);
+    CHECK(toJson(q) == toJson(p));
+    // Un archivo con solape sin transición se rechaza.
+    std::string bad = toJson(p);
+    const std::size_t pos = bad.find("\"transitionIn\"");
+    CHECK(pos != std::string::npos);
+    bad.replace(pos, std::string("\"transitionIn\": 15").size(), "\"transitionIn\": 0");
+    Project q3;
+    CHECK(!fromJson(bad, q3, err));
+}
+
 int main() {
     testTimecode();
     testAddAndOverlap();
@@ -504,6 +583,7 @@ int main() {
     testProjectFiles();
     testMltXml();
     testClipFx();
+    testTransitions();
     testMediaProbe();
     std::printf("%d comprobaciones, %d fallos\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;

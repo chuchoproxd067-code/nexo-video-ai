@@ -42,6 +42,29 @@ void Timeline::sortTrack(std::size_t track) {
               [](const Clip& a, const Clip& b) { return a.timelineStart < b.timelineStart; });
 }
 
+std::string Timeline::transitionProblem(std::size_t track) const {
+    const auto& cl = tracks_[track].clips;
+    for (std::size_t i = 0; i < cl.size(); ++i) {
+        const Clip& c = cl[i];
+        if (c.transitionIn < 0) return "Transición negativa.";
+        for (std::size_t j = 0; j + 1 < i; ++j)
+            if (cl[j].timelineEnd() > c.timelineStart) return "Clips solapados en la pista " + std::to_string(track) + ".";
+        if (i > 0 && cl[i - 1].timelineEnd() > c.timelineStart) {
+            if (c.transitionIn == 0 || cl[i - 1].timelineEnd() - c.timelineStart != c.transitionIn)
+                return "Clips solapados en la pista " + std::to_string(track) + ".";
+        }
+        if (c.transitionIn > 0) {
+            if (i == 0) return "Una transición necesita un clip anterior.";
+            const Clip& prev = cl[i - 1];
+            if (prev.timelineEnd() - c.timelineStart != c.transitionIn) return "La transición no coincide con el solape.";
+            if (prev.duration < prev.transitionIn + c.transitionIn) return "La transición es más larga que el clip anterior.";
+        }
+        const Frame nextN = i + 1 < cl.size() ? cl[i + 1].transitionIn : 0;
+        if (c.duration < c.transitionIn + nextN) return "Las transiciones del clip son más largas que el clip.";
+    }
+    return {};
+}
+
 Result Timeline::addClip(std::size_t track, Clip clip) {
     clip.id = nextId_;
     Result r = insertClip(track, std::move(clip));
@@ -57,11 +80,22 @@ Result Timeline::insertClip(std::size_t track, Clip clip) {
     if (clip.sourceIn < 0) return Result::failure("El punto de entrada no puede ser negativo.");
     if (clip.timelineStart < 0) return Result::failure("La posición no puede ser negativa.");
     if (clip.mediaPath.empty()) return Result::failure("El clip no tiene ruta de medio.");
-    if (overlaps(track, clip.timelineStart, clip.timelineEnd(), 0))
+    if (clip.transitionIn < 0) return Result::failure("La transición no puede ser negativa.");
+    if (clip.transitionIn == 0 && overlaps(track, clip.timelineStart, clip.timelineEnd(), 0))
         return Result::failure("El clip se solapa con otro en la pista.");
+    const std::vector<Clip> backup = tracks_[track].clips;
+    const ClipId backupNext = nextId_;
     if (clip.id >= nextId_) nextId_ = clip.id + 1;
     tracks_[track].clips.push_back(clip);
     sortTrack(track);
+    if (clip.transitionIn > 0) {   // solo se admite el solape de una transición bien formada
+        const std::string problem = transitionProblem(track);
+        if (!problem.empty()) {
+            tracks_[track].clips = backup;
+            nextId_ = backupNext;
+            return Result::failure(problem);
+        }
+    }
     return Result::success(clip.id);
 }
 
@@ -72,6 +106,11 @@ Result Timeline::moveClip(ClipId id, std::size_t toTrack, Frame newStart) {
     if (newStart < 0) return Result::failure("La posición no puede ser negativa.");
     if (tracks_[toTrack].kind != tracks_[loc.track].kind)
         return Result::failure("No se puede mover un clip entre pistas de distinto tipo.");
+    {
+        const auto& cl = tracks_[loc.track].clips;
+        if (cl[loc.index].transitionIn > 0 || (loc.index + 1 < cl.size() && cl[loc.index + 1].transitionIn > 0))
+            return Result::failure("Quita la transición de este clip antes de moverlo.");
+    }
     Clip clip = tracks_[loc.track].clips[loc.index];
     if (overlaps(toTrack, newStart, newStart + clip.duration, id))
         return Result::failure("El clip se solaparía con otro en la pista de destino.");
@@ -90,6 +129,28 @@ void clampFades(Clip& c) {
 }
 }  // namespace
 
+Result Timeline::setTransition(ClipId id, Frame frames) {
+    Location loc;
+    if (!find(id, loc)) return Result::failure("El clip no existe.");
+    if (frames < 0) return Result::failure("La transición no puede ser negativa.");
+    auto& clips = tracks_[loc.track].clips;
+    if (loc.index == 0) return Result::failure("La transición necesita un clip anterior en la pista.");
+    const Clip& prev = clips[loc.index - 1];
+    Clip& c = clips[loc.index];
+    if (frames == c.transitionIn) return Result::success(id);
+    if (c.transitionIn == 0 && prev.timelineEnd() != c.timelineStart)
+        return Result::failure("Los clips deben estar pegados (sin hueco) para poner una transición.");
+    const std::vector<Clip> backup = clips;
+    const Frame newStart = prev.timelineEnd() - frames;
+    const Frame delta = newStart - c.timelineStart;
+    for (std::size_t i = loc.index; i < clips.size(); ++i) clips[i].timelineStart += delta;
+    clips[loc.index].transitionIn = frames;
+    std::string problem = transitionProblem(loc.track);
+    if (problem.empty() && clips[loc.index].timelineStart < 0) problem = "La posición no puede ser negativa.";
+    if (!problem.empty()) { clips = backup; return Result::failure(problem); }
+    return Result::success(id);
+}
+
 Result Timeline::setClipFx(ClipId id, double volume, Frame fadeIn, Frame fadeOut) {
     Location loc;
     if (!find(id, loc)) return Result::failure("El clip no existe.");
@@ -107,6 +168,7 @@ Result Timeline::trimStart(ClipId id, Frame delta) {
     Location loc;
     if (!find(id, loc)) return Result::failure("El clip no existe.");
     Clip& c = tracks_[loc.track].clips[loc.index];
+    if (c.transitionIn > 0) return Result::failure("Quita la transición de entrada antes de recortar el inicio.");
     const Frame newStart = c.timelineStart + delta;
     const Frame newIn = c.sourceIn + delta;
     const Frame newDur = c.duration - delta;
@@ -115,11 +177,18 @@ Result Timeline::trimStart(ClipId id, Frame delta) {
     if (newStart < 0) return Result::failure("El recorte lo sacaría del inicio de la secuencia.");
     if (delta < 0 && overlaps(loc.track, newStart, c.timelineStart, id))
         return Result::failure("No hay espacio libre para alargar el clip.");
+    const Clip before = c;
     c.timelineStart = newStart;
     c.sourceIn = newIn;
     c.duration = newDur;
     clampFades(c);
     sortTrack(loc.track);
+    const std::string problem = transitionProblem(loc.track);
+    if (!problem.empty()) {
+        for (Clip& x : tracks_[loc.track].clips) if (x.id == id) x = before;
+        sortTrack(loc.track);
+        return Result::failure(problem);
+    }
     return Result::success(id);
 }
 
@@ -127,12 +196,17 @@ Result Timeline::trimEnd(ClipId id, Frame delta) {
     Location loc;
     if (!find(id, loc)) return Result::failure("El clip no existe.");
     Clip& c = tracks_[loc.track].clips[loc.index];
+    if (loc.index + 1 < tracks_[loc.track].clips.size() && tracks_[loc.track].clips[loc.index + 1].transitionIn > 0)
+        return Result::failure("Quita la transición del clip siguiente antes de recortar el final.");
     const Frame newDur = c.duration + delta;
     if (newDur <= 0) return Result::failure("El recorte dejaría el clip sin duración.");
     if (delta > 0 && overlaps(loc.track, c.timelineEnd(), c.timelineEnd() + delta, id))
         return Result::failure("No hay espacio libre para alargar el clip.");
+    const Clip before = c;
     c.duration = newDur;
     clampFades(c);
+    const std::string problem = transitionProblem(loc.track);
+    if (!problem.empty()) { c = before; return Result::failure(problem); }
     return Result::success(id);
 }
 
@@ -140,6 +214,7 @@ Result Timeline::splitClip(ClipId id, Frame at) {
     Location loc;
     if (!find(id, loc)) return Result::failure("El clip no existe.");
     Clip& c = tracks_[loc.track].clips[loc.index];
+    const Clip original = c;
     if (at <= c.timelineStart || at >= c.timelineEnd())
         return Result::failure("La posición de corte debe estar dentro del clip.");
     Clip right = c;
@@ -151,11 +226,20 @@ Result Timeline::splitClip(ClipId id, Frame at) {
     c.duration = leftDur;
     c.fadeOut = 0;        // el fundido de salida pasa al clip derecho; el de entrada se queda a la izquierda
     right.fadeIn = 0;
+    right.transitionIn = 0;   // la transición de entrada se queda en el clip izquierdo
     clampFades(c);
     clampFades(right);
     const std::size_t track = loc.track;
     tracks_[track].clips.push_back(right);
     sortTrack(track);
+    const std::string problem = transitionProblem(track);
+    if (!problem.empty()) {   // el corte caería dentro de una zona de transición: se deshace
+        auto& clips = tracks_[track].clips;
+        clips.erase(std::remove_if(clips.begin(), clips.end(), [&](const Clip& x) { return x.id == right.id; }), clips.end());
+        for (Clip& x : clips) if (x.id == id) x = original;
+        nextId_ = right.id;
+        return Result::failure("No se puede dividir aquí: " + problem);
+    }
     return Result::success(right.id);
 }
 
@@ -164,6 +248,7 @@ Result Timeline::removeClip(ClipId id) {
     if (!find(id, loc)) return Result::failure("El clip no existe.");
     auto& clips = tracks_[loc.track].clips;
     clips.erase(clips.begin() + static_cast<std::ptrdiff_t>(loc.index));
+    if (loc.index < clips.size()) clips[loc.index].transitionIn = 0;   // su transición era con el clip eliminado
     return Result::success(id);
 }
 
@@ -178,9 +263,9 @@ std::string Timeline::validate() const {
             if (!(c.volume >= 0.0 && c.volume <= 4.0) || c.fadeIn < 0 || c.fadeOut < 0 || c.fadeIn + c.fadeOut > c.duration)
                 return "Clip con volumen o fundidos fuera de rango.";
             if (!ids.insert(c.id).second) return "Identificador de clip duplicado.";
-            if (i > 0 && clips[i - 1].timelineEnd() > c.timelineStart)
-                return "Clips solapados en la pista " + std::to_string(t) + ".";
         }
+        const std::string p = transitionProblem(t);   // solapes (solo válidos como transición) y transiciones
+        if (!p.empty()) return p;
     }
     return {};
 }

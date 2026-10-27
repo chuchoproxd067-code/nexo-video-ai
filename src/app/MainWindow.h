@@ -39,6 +39,7 @@ private:
     void exportVideo();
     void playExternal();
     void editClipFx();
+    void editTransition();
     bool beginRender(const QString& title, const nexo::ExportSettings& st, const QString& out);
     void rebuildLibrary();
     void onProbed(const QString& path, const nexo::MediaInfo& info);

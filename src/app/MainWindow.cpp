@@ -85,6 +85,7 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
     tb->addSeparator();
     auto* split = tb->addAction("Dividir en el cursor");
     auto* fxA = tb->addAction("Volumen y fundidos…");
+    auto* trA = tb->addAction("Fundido cruzado…");
     auto* del = tb->addAction("Eliminar clip");
     del->setShortcut(QKeySequence::Delete);
     split->setShortcut(Qt::Key_S);
@@ -128,6 +129,7 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
         statusBar()->showMessage(r.ok ? "Clip dividido" : QString::fromStdString(r.error), 5000);
         refresh();
     });
+    connect(trA, &QAction::triggered, this, [this] { editTransition(); });
     connect(fxA, &QAction::triggered, this, [this] { editClipFx(); });
     connect(del, &QAction::triggered, this, [this] {
         const nexo::ClipId id = timeline_->selectedClip();
@@ -397,6 +399,26 @@ void MainWindow::editClipFx() {
     const nexo::Frame fo = nexo::secondsToFrames(fout->value(), tl.frameRate());
     const auto r = history_.apply("Volumen y fundidos", [&](nexo::Timeline& t) { return t.setClipFx(id, v, fi, fo); });
     statusBar()->showMessage(r.ok ? "Volumen y fundidos aplicados" : QString::fromStdString(r.error), 6000);
+    refresh();
+}
+
+void MainWindow::editTransition() {
+    const nexo::ClipId id = timeline_->selectedClip();
+    if (id == 0) { statusBar()->showMessage("Selecciona el segundo clip de la pareja (el que viene después) para poner un fundido cruzado.", 6000); return; }
+    const nexo::Timeline& tl = history_.timeline();
+    const nexo::Clip* clip = nullptr;
+    for (std::size_t t = 0; t < tl.trackCount() && !clip; ++t)
+        for (const nexo::Clip& c : tl.track(t).clips) if (c.id == id) clip = &c;
+    if (!clip) return;
+    const double fps = double(tl.frameRate().num) / double(tl.frameRate().den);
+    bool ok = false;
+    const double sec = QInputDialog::getDouble(this, "Fundido cruzado",
+        "Duración en segundos (0 = quitar). Los dos clips se solapan esa duración y el vídeo total se acorta lo mismo:",
+        double(clip->transitionIn) / fps, 0.0, 30.0, 2, &ok, Qt::WindowFlags(), 0.25);
+    if (!ok) return;
+    const nexo::Frame n = nexo::secondsToFrames(sec, tl.frameRate());
+    const auto r = history_.apply("Fundido cruzado", [&](nexo::Timeline& t) { return t.setTransition(id, n); });
+    statusBar()->showMessage(r.ok ? "Fundido cruzado aplicado" : QString::fromStdString(r.error), 7000);
     refresh();
 }
 

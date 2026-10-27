@@ -11,11 +11,28 @@
 
 int main(int argc, char** argv) {
     const bool fx = argc == 5 && std::string(argv[4]) == "--fx";
-    if (argc != 4 && !fx) {
-        std::fprintf(stderr, "uso: %s <salida.mlt> <clipA> <clipB> [--fx]\n", argv[0]);
+    const bool xfade = argc == 5 && std::string(argv[4]) == "--xfade";
+    if (argc != 4 && !fx && !xfade) {
+        std::fprintf(stderr, "uso: %s <salida.mlt> <clipA> <clipB> [--fx|--xfade]\n", argv[0]);
         return 2;
     }
     nexo::Timeline tl({30, 1});
+    if (xfade) {   // A (60) y B (60) con 20 fotogramas de fundido cruzado: dura 100
+        const auto v = tl.addTrack("V1", nexo::TrackKind::Video);
+        nexo::Clip c;
+        c.mediaPath = argv[2]; c.sourceIn = 0; c.duration = 60; c.timelineStart = 0;
+        tl.addClip(v, c);
+        c.mediaPath = argv[3]; c.timelineStart = 60;
+        const auto b = tl.addClip(v, c);
+        const nexo::Result t = tl.setTransition(b.clip, 20);
+        if (!t.ok) { std::fprintf(stderr, "error: %s\n", t.error.c_str()); return 1; }
+        nexo::ExportSettings st; st.width = 640; st.height = 360;
+        const nexo::XmlResult r = nexo::buildMltXml(tl, st);
+        if (!r.ok) { std::fprintf(stderr, "error: %s\n", r.error.c_str()); return 1; }
+        std::ofstream f(argv[1], std::ios::binary);
+        f << r.xml;
+        return f ? 0 : 1;
+    }
     if (fx) {   // un solo clip de 90 fotogramas (desde el 30 del medio) con volumen 0.5 y fundidos de 30 fotogramas
         const auto v = tl.addTrack("V1", nexo::TrackKind::Video);
         nexo::Clip c;

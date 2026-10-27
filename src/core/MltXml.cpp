@@ -99,15 +99,51 @@ XmlResult buildMltXml(const Timeline& tl, const ExportSettings& st) {
             x << "  </producer>\n";
         }
 
+    // Fundidos cruzados: un mini-tractor por transición con la cola del clip anterior y la cabeza del
+    // clip nuevo; `luma` sin recurso es un disolver de video y `mix` es el fundido cruzado de audio.
+    for (std::size_t t = 0; t < tl.trackCount(); ++t) {
+        const auto& clips = tl.track(t).clips;
+        for (std::size_t i = 1; i < clips.size(); ++i) {
+            const Clip& a = clips[i - 1];
+            const Clip& b = clips[i];
+            const Frame n = b.transitionIn;
+            if (n <= 0) continue;
+            x << "  <playlist id=\"mixa_" << b.id << "\">\n    <entry producer=\"clip_" << a.id << "\" in=\""
+              << a.sourceIn + a.duration - n << "\" out=\"" << a.sourceIn + a.duration - 1 << "\"/>\n  </playlist>\n";
+            x << "  <playlist id=\"mixb_" << b.id << "\">\n    <entry producer=\"clip_" << b.id << "\" in=\""
+              << b.sourceIn << "\" out=\"" << b.sourceIn + n - 1 << "\"/>\n  </playlist>\n";
+            x << "  <tractor id=\"mix_" << b.id << "\" in=\"0\" out=\"" << n - 1 << "\">\n"
+              << "    <multitrack>\n      <track producer=\"mixa_" << b.id << "\"/>\n      <track producer=\"mixb_" << b.id << "\"/>\n    </multitrack>\n";
+            if (tl.track(t).kind == TrackKind::Video)
+                x << "    <transition>\n      <property name=\"mlt_service\">luma</property>\n"
+                  << "      <property name=\"in\">0</property>\n      <property name=\"out\">" << n - 1 << "</property>\n"
+                  << "      <property name=\"a_track\">0</property>\n      <property name=\"b_track\">1</property>\n    </transition>\n";
+            x << "    <transition>\n      <property name=\"mlt_service\">mix</property>\n"
+              << "      <property name=\"in\">0</property>\n      <property name=\"out\">" << n - 1 << "</property>\n"
+              << "      <property name=\"a_track\">0</property>\n      <property name=\"b_track\">1</property>\n    </transition>\n"
+              << "  </tractor>\n";
+        }
+    }
+
     for (std::size_t t = 0; t < tl.trackCount(); ++t) {
         x << "  <playlist id=\"pl_" << t << "\">\n";
+        const auto& clips = tl.track(t).clips;   // ordenados por posición
         Frame cursor = 0;
-        for (const Clip& c : tl.track(t).clips) {   // ya ordenados por posición
-            if (c.timelineStart > cursor)
-                x << "    <blank length=\"" << c.timelineStart - cursor << "\"/>\n";
-            x << "    <entry producer=\"clip_" << c.id << "\" in=\"" << c.sourceIn << "\" out=\""
-              << c.sourceIn + c.duration - 1 << "\"/>\n";
-            cursor = c.timelineEnd();
+        for (std::size_t i = 0; i < clips.size(); ++i) {
+            const Clip& c = clips[i];
+            const Frame nextN = i + 1 < clips.size() ? clips[i + 1].transitionIn : 0;
+            if (c.transitionIn > 0) {   // la zona de mezcla con el clip anterior
+                x << "    <entry producer=\"mix_" << c.id << "\" in=\"0\" out=\"" << c.transitionIn - 1 << "\"/>\n";
+                cursor += c.transitionIn;
+            }
+            const Frame startTl = c.timelineStart + c.transitionIn;
+            const Frame len = c.duration - c.transitionIn - nextN;
+            if (len > 0) {
+                if (startTl > cursor) x << "    <blank length=\"" << startTl - cursor << "\"/>\n";
+                x << "    <entry producer=\"clip_" << c.id << "\" in=\"" << c.sourceIn + c.transitionIn << "\" out=\""
+                  << c.sourceIn + c.transitionIn + len - 1 << "\"/>\n";
+                cursor = startTl + len;
+            }
         }
         x << "  </playlist>\n";
     }

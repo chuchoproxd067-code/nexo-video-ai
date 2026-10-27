@@ -154,6 +154,21 @@ jobs:
           } | tee evidence/vol_diag.txt
           echo "::notice title=Sintaxis de volume en melt::$(tr '\n' '|' < evidence/vol_diag.txt)"
 
+      # Fundido cruzado: A (60) + B (60) con 20 fotogramas de mezcla = 100 fotogramas, con disolver real.
+      - name: Render crossfade transition
+        shell: msys2 {0}
+        run: |
+          build/tests/mlt_xml_tool evidence/xfade.mlt "$(pwd -W)/evidence/clipA.mp4" "$(pwd -W)/evidence/clipB.mp4" --xfade
+          melt evidence/xfade.mlt -consumer avformat:evidence/xfade.mp4 vcodec=libx264 acodec=aac > evidence/xfade.log 2>&1 || true
+          frames=$(ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=nw=1:nk=1 evidence/xfade.mp4)
+          ffmpeg -hide_banner -i evidence/xfade.mp4 -vf signalstats,metadata=print:key=lavfi.signalstats.YAVG -an -f null - 2>&1 | grep -o 'YAVG=[0-9.]*' | cut -d= -f2 > evidence/xfade_yavg.txt
+          ya=$(sed -n 20p evidence/xfade_yavg.txt); y40=$(sed -n 41p evidence/xfade_yavg.txt); ymid=$(sed -n 50p evidence/xfade_yavg.txt); y59=$(sed -n 59p evidence/xfade_yavg.txt); yb=$(sed -n 80p evidence/xfade_yavg.txt)
+          amid=$(ffmpeg -hide_banner -i evidence/xfade.mp4 -af atrim=1.45:1.85,volumedetect -vn -f null - 2>&1 | grep -o 'max_volume: [-0-9.]*' | cut -d' ' -f2)
+          msg="fotogramas=$frames; YAVG A(20)=$ya f41=$y40 mezcla(50)=$ymid f59=$y59 B(80)=$yb; audio en la mezcla max=$amid dB"
+          echo "::notice title=Fundido cruzado (render real)::$msg"
+          [ "$frames" = "100" ] || { echo "::error title=Fundido cruzado::duración incorrecta: $msg"; exit 1; }
+          awk -v a="$ya" -v m="$ymid" -v b="$yb" -v am="$amid" 'BEGIN{ d=(a>b)?a-b:b-a; lo=(a<b)?a:b; hi=(a<b)?b:a; ok=(d>20 && m>lo+d*0.15 && m<hi-d*0.15 && am>-40); exit ok?0:1 }' || { echo "::error title=Fundido cruzado::la zona de mezcla no está entre A y B: $msg"; exit 1; }
+
       - name: Capture melt progress output format
         continue-on-error: true
         shell: msys2 {0}

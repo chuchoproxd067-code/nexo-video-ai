@@ -30,6 +30,9 @@ struct Clip {
     double volume = 1.0;         // 0..4 (1 = sin cambio)
     Frame fadeIn = 0;            // fotogramas de fundido de entrada (audio y video)
     Frame fadeOut = 0;           // fotogramas de fundido de salida
+    // Fundido cruzado con el clip anterior de la pista: los dos clips se solapan exactamente estos
+    // fotogramas (timelineStart = fin del anterior - transitionIn). No necesita material extra.
+    Frame transitionIn = 0;
     Frame timelineEnd() const { return timelineStart + duration; }
 };
 
@@ -75,6 +78,9 @@ public:
     Result removeClip(ClipId id);
     // Volumen y fundidos del clip. Error si volume fuera de [0,4], fundidos negativos o
     // fadeIn + fadeOut mayores que la duración.
+    // Pone (frames>0) o quita (0) el fundido cruzado con el clip anterior. Los clips deben estar
+    // pegados; este y los siguientes de la pista se desplazan para conservar la continuidad.
+    Result setTransition(ClipId id, Frame frames);
     Result setClipFx(ClipId id, double volume, Frame fadeIn, Frame fadeOut);
 
     // Comprueba invariantes (sin solapes, duraciones > 0, ids únicos).
@@ -86,6 +92,7 @@ private:
     bool find(ClipId id, Location& out) const;
     bool overlaps(std::size_t track, Frame start, Frame end, ClipId ignore) const;
     void sortTrack(std::size_t track);
+    std::string transitionProblem(std::size_t track) const;
 
     FrameRate fps_;
     std::vector<Track> tracks_;
