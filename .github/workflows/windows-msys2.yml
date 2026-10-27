@@ -109,7 +109,8 @@ jobs:
         continue-on-error: true
         shell: msys2 {0}
         run: |
-          melt evidence/proj.mlt -progress2 -consumer avformat:evidence/out_progress.mp4 vcodec=libx264 acodec=aac > /dev/null 2> evidence/progress2.log || true
+          build/tests/mlt_xml_tool evidence/proj_abs.mlt "$(pwd -W)/evidence/clipA.mp4" "$(pwd -W)/evidence/clipB.mp4" > /dev/null
+          melt evidence/proj_abs.mlt -progress2 -consumer avformat:evidence/out_progress.mp4 vcodec=libx264 acodec=aac > /dev/null 2> evidence/progress2.log || true
           sample="$(tr '\r' '\n' < evidence/progress2.log | grep -v -i 'ladspa\|lv2\|vst' | head -n 6 | cut -c1-120 | tr '\n' '|')"
           echo "::notice title=melt -progress2 real::${sample:0:1500}"
 
