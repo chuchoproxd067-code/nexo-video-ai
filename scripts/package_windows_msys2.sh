@@ -43,6 +43,10 @@ mkdir -p "$OUT/lib" "$OUT/share"
 cp -r "$MLTMOD"  "$OUT/lib/mlt"
 cp -r "$MLTDATA" "$OUT/share/mlt"
 
+# --- recursos de ejemplo (sonidos y música CC0 generados por tools/gen_assets.py) ---
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -d "$REPO_ROOT/assets" ]; then cp -r "$REPO_ROOT/assets" "$OUT/assets"; fi
+
 # --- DLL de las que depende todo lo anterior --------------------------------
 # Se leen las importaciones con objdump y se copia del prefijo de MSYS2 lo que exista
 # allí. No se usa ldd: resolvía mal las DLL de los módulos de MLT. Las DLL del sistema

@@ -4,7 +4,9 @@
 #include <functional>
 
 #include <QAction>
+#include <QCoreApplication>
 #include <QDir>
+#include <QPair>
 #include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -97,6 +99,14 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
     libraryDock->setWidget(library_);
     addDockWidget(Qt::LeftDockWidgetArea, libraryDock);
 
+    auto* resDock = new QDockWidget("Recursos (sonidos y música libres)", this);
+    resources_ = new QListWidget;
+    resDock->setWidget(resources_);
+    addDockWidget(Qt::LeftDockWidgetArea, resDock);
+    tabifyDockWidget(libraryDock, resDock);
+    libraryDock->raise();
+    fillResources();
+
     viewer_ = new QLabel(importer_->available()
                                   ? "Importa medios, añádelos a la línea de tiempo (doble clic en la biblioteca) y exporta."
                                   : "Esta compilación no incluye melt: no se pueden leer medios ni exportar.");
@@ -118,6 +128,7 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
         if (library_->currentItem()) addToTimeline(library_->currentItem());
         else statusBar()->showMessage("Selecciona un medio de la biblioteca primero.", 4000);
     });
+    connect(resources_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* it) { addResource(it); });
     connect(library_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* it) { addToTimeline(it); });
     connect(exportA, &QAction::triggered, this, [this] { exportVideo(); });
     connect(playA, &QAction::triggered, this, [this] { playExternal(); });
@@ -248,6 +259,10 @@ void MainWindow::onProbed(const QString& path, const nexo::MediaInfo& info) {
     project_.addMedia(path.toStdString());
     addLibraryItem(path, QFileInfo(path).fileName() + "  —  " + describe(info));
     statusBar()->showMessage("Medio listo: " + QFileInfo(path).fileName(), 4000);
+    if (addWhenReady_.removeAll(path) > 0) {
+        for (int i = 0; i < library_->count(); ++i)
+            if (library_->item(i)->data(Qt::UserRole).toString() == path) { addToTimeline(library_->item(i)); break; }
+    }
 }
 
 void MainWindow::onProbeFailed(const QString& path, const QString& message) {
@@ -420,6 +435,39 @@ void MainWindow::editTransition() {
     const auto r = history_.apply("Fundido cruzado", [&](nexo::Timeline& t) { return t.setTransition(id, n); });
     statusBar()->showMessage(r.ok ? "Fundido cruzado aplicado" : QString::fromStdString(r.error), 7000);
     refresh();
+}
+
+void MainWindow::fillResources() {
+    // Junto al ejecutable: <paquete>/bin/nexo-video-ai.exe y <paquete>/assets/{sfx,music}.
+    const QDir root(QCoreApplication::applicationDirPath() + "/../assets");
+    const QList<QPair<QString, QString>> groups{{"sfx", "Efecto"}, {"music", "Música"}};
+    for (const auto& g : groups) {
+        const QDir dir(root.filePath(g.first));
+        for (const QFileInfo& fi : dir.entryInfoList({"*.ogg", "*.wav", "*.mp3"}, QDir::Files, QDir::Name)) {
+            auto* it = new QListWidgetItem(g.second + " · " + fi.completeBaseName().replace('-', ' '));
+            it->setData(Qt::UserRole, fi.absoluteFilePath());
+            it->setToolTip(fi.absoluteFilePath() + "\nCC0 / dominio público (ver assets/LICENSE-ASSETS.md)");
+            resources_->addItem(it);
+        }
+    }
+    if (resources_->count() == 0) {
+        auto* it = new QListWidgetItem("(esta compilación no incluye la carpeta de recursos)");
+        it->setFlags(Qt::NoItemFlags);
+        resources_->addItem(it);
+    }
+}
+
+void MainWindow::addResource(QListWidgetItem* item) {
+    const QString path = item->data(Qt::UserRole).toString();
+    if (path.isEmpty()) return;
+    if (!importer_->available()) { statusBar()->showMessage("Esta compilación no incluye melt.", 5000); return; }
+    if (info_.contains(path)) {
+        for (int i = 0; i < library_->count(); ++i)
+            if (library_->item(i)->data(Qt::UserRole).toString() == path) { addToTimeline(library_->item(i)); return; }
+    }
+    addWhenReady_ << path;
+    addLibraryItem(path, QFileInfo(path).fileName() + "  (leyendo…)");
+    importer_->enqueue({path});
 }
 
 void MainWindow::rebuildLibrary() {

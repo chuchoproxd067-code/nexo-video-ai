@@ -42,6 +42,8 @@ private:
     void editTransition();
     bool beginRender(const QString& title, const nexo::ExportSettings& st, const QString& out);
     void rebuildLibrary();
+    void fillResources();
+    void addResource(QListWidgetItem* item);
     void onProbed(const QString& path, const nexo::MediaInfo& info);
     void onProbeFailed(const QString& path, const QString& message);
     void addLibraryItem(const QString& path, const QString& text);
@@ -52,6 +54,8 @@ private:
     nexo::History history_;
     TimelineWidget* timeline_ = nullptr;
     QListWidget* library_ = nullptr;
+    QListWidget* resources_ = nullptr;
+    QStringList addWhenReady_;      // recursos pedidos con doble clic: se añaden al terminar de leerlos
     MediaImporter* importer_ = nullptr;
     Exporter* exporter_ = nullptr;
     Previewer* previewer_ = nullptr;
