@@ -6,6 +6,10 @@
 #include <QAction>
 #include <QDir>
 #include <QDesktopServices>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
 #include <QDockWidget>
 #include <QStandardPaths>
 #include <QUrl>
@@ -80,6 +84,7 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
     auto* exportA = tb->addAction("Exportar…");
     tb->addSeparator();
     auto* split = tb->addAction("Dividir en el cursor");
+    auto* fxA = tb->addAction("Volumen y fundidos…");
     auto* del = tb->addAction("Eliminar clip");
     del->setShortcut(QKeySequence::Delete);
     split->setShortcut(Qt::Key_S);
@@ -123,6 +128,7 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
         statusBar()->showMessage(r.ok ? "Clip dividido" : QString::fromStdString(r.error), 5000);
         refresh();
     });
+    connect(fxA, &QAction::triggered, this, [this] { editClipFx(); });
     connect(del, &QAction::triggered, this, [this] {
         const nexo::ClipId id = timeline_->selectedClip();
         if (id == 0) { statusBar()->showMessage("Selecciona un clip para eliminarlo.", 4000); return; }
@@ -358,6 +364,40 @@ void MainWindow::playExternal() {
     const QString out = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + "/nexo-vista-previa.mp4";
     playPending_ = true;
     beginRender("Preparando vista previa", st, out);
+}
+
+void MainWindow::editClipFx() {
+    const nexo::ClipId id = timeline_->selectedClip();
+    if (id == 0) { statusBar()->showMessage("Selecciona un clip (clic) para cambiar su volumen y fundidos.", 5000); return; }
+    const nexo::Timeline& tl = history_.timeline();
+    const nexo::Clip* clip = nullptr;
+    for (std::size_t t = 0; t < tl.trackCount() && !clip; ++t)
+        for (const nexo::Clip& c : tl.track(t).clips) if (c.id == id) clip = &c;
+    if (!clip) return;
+    const double fps = double(tl.frameRate().num) / double(tl.frameRate().den);
+    const double maxSec = double(clip->duration) / fps;
+
+    QDialog dlg(this);
+    dlg.setWindowTitle("Volumen y fundidos");
+    auto* form = new QFormLayout(&dlg);
+    auto* vol = new QDoubleSpinBox; vol->setRange(0, 400); vol->setSuffix(" %"); vol->setDecimals(0); vol->setValue(clip->volume * 100.0);
+    auto* fin = new QDoubleSpinBox; fin->setRange(0, maxSec); fin->setSuffix(" s"); fin->setDecimals(2); fin->setSingleStep(0.25); fin->setValue(double(clip->fadeIn) / fps);
+    auto* fout = new QDoubleSpinBox; fout->setRange(0, maxSec); fout->setSuffix(" s"); fout->setDecimals(2); fout->setSingleStep(0.25); fout->setValue(double(clip->fadeOut) / fps);
+    form->addRow("Volumen", vol);
+    form->addRow("Fundido de entrada", fin);
+    form->addRow("Fundido de salida", fout);
+    auto* bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    form->addRow(bb);
+    connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    const double v = vol->value() / 100.0;
+    const nexo::Frame fi = nexo::secondsToFrames(fin->value(), tl.frameRate());
+    const nexo::Frame fo = nexo::secondsToFrames(fout->value(), tl.frameRate());
+    const auto r = history_.apply("Volumen y fundidos", [&](nexo::Timeline& t) { return t.setClipFx(id, v, fi, fo); });
+    statusBar()->showMessage(r.ok ? "Volumen y fundidos aplicados" : QString::fromStdString(r.error), 6000);
+    refresh();
 }
 
 void MainWindow::rebuildLibrary() {

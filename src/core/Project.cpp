@@ -71,6 +71,9 @@ std::string toJson(const Project& p) {
             jc.set("sourceIn", Value::number(static_cast<double>(c.sourceIn)));
             jc.set("start", Value::number(static_cast<double>(c.timelineStart)));
             jc.set("duration", Value::number(static_cast<double>(c.duration)));
+            if (c.volume != 1.0) jc.set("volume", Value::number(c.volume));
+            if (c.fadeIn != 0) jc.set("fadeIn", Value::number(static_cast<double>(c.fadeIn)));
+            if (c.fadeOut != 0) jc.set("fadeOut", Value::number(static_cast<double>(c.fadeOut)));
             clips.push(std::move(jc));
         }
         jt.set("clips", std::move(clips));
@@ -167,6 +170,16 @@ bool fromJson(const std::string& text, Project& out, std::string& error) {
             c.sourceIn = in;
             c.timelineStart = start;
             c.duration = dur;
+            // Campos opcionales (proyectos anteriores no los tienen).
+            if (const json::Value* v = jc.get("volume")) {
+                if (!v->isNumber()) { error = "Clip " + std::to_string(id) + ": volumen inválido."; return false; }
+                c.volume = v->asNumber();
+            }
+            for (const char* key : {"fadeIn", "fadeOut"}) {
+                std::int64_t fv = 0;
+                if (jc.get(key) && !needInt(jc, key, fv, err)) { error = "Clip " + std::to_string(id) + ": " + err; return false; }
+                (key[4] == 'I' ? c.fadeIn : c.fadeOut) = fv;
+            }
             const Result r = tl.insertClip(ti, c);
             if (!r.ok) { error = "Clip " + std::to_string(id) + " en '" + name + "': " + r.error; return false; }
         }

@@ -27,6 +27,9 @@ struct Clip {
     Frame sourceIn = 0;
     Frame duration = 0;
     Frame timelineStart = 0;
+    double volume = 1.0;         // 0..4 (1 = sin cambio)
+    Frame fadeIn = 0;            // fotogramas de fundido de entrada (audio y video)
+    Frame fadeOut = 0;           // fotogramas de fundido de salida
     Frame timelineEnd() const { return timelineStart + duration; }
 };
 
@@ -70,6 +73,9 @@ public:
     // Divide en `at` (posición en la secuencia, estrictamente dentro del clip).
     Result splitClip(ClipId id, Frame at);
     Result removeClip(ClipId id);
+    // Volumen y fundidos del clip. Error si volume fuera de [0,4], fundidos negativos o
+    // fadeIn + fadeOut mayores que la duración.
+    Result setClipFx(ClipId id, double volume, Frame fadeIn, Frame fadeOut);
 
     // Comprueba invariantes (sin solapes, duraciones > 0, ids únicos).
     // Devuelve cadena vacía si todo es válido.

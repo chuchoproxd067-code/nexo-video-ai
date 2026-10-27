@@ -29,6 +29,17 @@ std::string normalizePath(std::string p) {
     return p;
 }
 
+// Animación de MLT "pos=valor;pos=valor" en fotogramas del medio fuente (las posiciones de los
+// filtros de un producer son las del medio, no las de la secuencia).
+std::string fadeKeyframes(const Clip& c, double level) {
+    const Frame s = c.sourceIn, e = c.sourceIn + c.duration - 1;
+    std::ostringstream k;
+    if (c.fadeIn > 0) k << s << "=0;" << s + c.fadeIn << "=" << level;
+    else k << s << "=" << level;
+    if (c.fadeOut > 0) k << ";" << std::max(e - c.fadeOut, s + c.fadeIn) << "=" << level << ";" << e << "=0";
+    return k.str();
+}
+
 }  // namespace
 
 XmlResult buildMltXml(const Timeline& tl, const ExportSettings& st) {
@@ -64,9 +75,18 @@ XmlResult buildMltXml(const Timeline& tl, const ExportSettings& st) {
     // Un producer por clip (más simple que compartirlos y evita efectos cruzados).
     for (std::size_t t = 0; t < tl.trackCount(); ++t)
         for (const Clip& c : tl.track(t).clips)
+        {
             x << "  <producer id=\"clip_" << c.id << "\">\n"
-              << "    <property name=\"resource\">" << esc(normalizePath(c.mediaPath)) << "</property>\n"
-              << "  </producer>\n";
+              << "    <property name=\"resource\">" << esc(normalizePath(c.mediaPath)) << "</property>\n";
+            const bool fades = c.fadeIn > 0 || c.fadeOut > 0;
+            if (c.volume != 1.0 || fades)
+                x << "    <filter>\n      <property name=\"mlt_service\">volume</property>\n"
+                  << "      <property name=\"gain\">" << fadeKeyframes(c, c.volume) << "</property>\n    </filter>\n";
+            if (fades && tl.track(t).kind == TrackKind::Video)
+                x << "    <filter>\n      <property name=\"mlt_service\">brightness</property>\n"
+                  << "      <property name=\"level\">" << fadeKeyframes(c, 1.0) << "</property>\n    </filter>\n";
+            x << "  </producer>\n";
+        }
 
     for (std::size_t t = 0; t < tl.trackCount(); ++t) {
         x << "  <playlist id=\"pl_" << t << "\">\n";

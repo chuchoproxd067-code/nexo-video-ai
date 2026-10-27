@@ -16,6 +16,7 @@ Fase actual: **2 — Base y compilación remota** (en curso).
 | Importación y biblioteca en la ventana | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Código escrito (`MediaImporter`, `MainWindow`); falta confirmar que compila en CI y probarlo a mano |
 | Seleccionar clip, cursor, dividir en el cursor, eliminar (ventana) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Usa las operaciones del núcleo ya probadas, con deshacer; falta probar a mano |
 | Arrastrar para mover y recortar clips (ventana) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Las operaciones del núcleo (mover, recortar) están verificadas por pruebas; el arrastre en la ventana no se ha probado a mano |
+| Volumen y fundidos de entrada/salida por clip | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Núcleo: pruebas unitarias (202 comprobaciones, 0 fallos), guardado/carga y división/recorte. Render real: el CI comprueba que melt oscurece el primer y último fotograma y baja el audio; el resultado se anota en la ejecución. Diálogo de la ventana sin probar a mano |
 | Vista previa de un fotograma (en el cursor) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | `Previewer` pide un PNG a `melt` (`in=N out=N`); el CI comprueba el comando con melt real; falta probarlo a mano |
 | Reproducir (render 480p y abrir en el reproductor del sistema) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Reutiliza el render de `melt` ya verificado en CI; abrir el reproductor no se ha probado a mano |
 | Reproducción integrada en el visor (tiempo real) | PENDIENTE | Requiere Qt Multimedia o un decodificador propio |

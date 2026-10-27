@@ -428,6 +428,67 @@ static void testMediaProbe() {
     CHECK(!parseMeltProbeXml(videoXml(), FrameRate{0, 1}).ok);
 }
 
+static void testClipFx() {
+    Timeline tl({30, 1});
+    const auto v = tl.addTrack("V1", TrackKind::Video);
+    const auto a = tl.addTrack("A1", TrackKind::Audio);
+    const ClipId id = tl.addClip(v, makeClip(0, 100, 10)).clip;
+    const ClipId ida = tl.addClip(a, makeClip(0, 100)).clip;
+    CHECK(tl.setClipFx(id, 0.5, 20, 30).ok);
+    CHECK(!tl.setClipFx(id, 5.0, 0, 0).ok);               // volumen fuera de rango
+    CHECK(!tl.setClipFx(id, -0.1, 0, 0).ok);
+    CHECK(!tl.setClipFx(id, 1.0, -1, 0).ok);              // fundido negativo
+    CHECK(!tl.setClipFx(id, 1.0, 60, 50).ok);             // suman más que el clip
+    CHECK(!tl.setClipFx(999, 1.0, 0, 0).ok);
+    CHECK(tl.track(v).clips[0].volume == 0.5 && tl.track(v).clips[0].fadeIn == 20 && tl.track(v).clips[0].fadeOut == 30);
+    CHECK(tl.validate().empty());
+
+    // Un recorte no deja fundidos mayores que el clip.
+    Timeline t2 = tl;
+    CHECK(t2.trimEnd(id, -70).ok);                         // duración 30
+    const Clip& c2 = t2.track(v).clips[0];
+    CHECK(c2.fadeIn + c2.fadeOut <= c2.duration && c2.fadeIn == 20 && c2.fadeOut == 10);
+    CHECK(t2.validate().empty());
+
+    // Al dividir: la entrada se queda a la izquierda, la salida pasa a la derecha, el volumen se hereda.
+    Timeline t3 = tl;
+    CHECK(t3.splitClip(id, 50).ok);
+    const Clip& l = t3.track(v).clips[0];
+    const Clip& rr = t3.track(v).clips[1];
+    CHECK(l.fadeIn == 20 && l.fadeOut == 0 && rr.fadeIn == 0 && rr.fadeOut == 30);
+    CHECK(l.volume == 0.5 && rr.volume == 0.5);
+    CHECK(t3.validate().empty());
+
+    // XML: filtros con fotogramas del medio fuente (sourceIn = 10, fin = 109).
+    ExportSettings st; st.width = 640; st.height = 360;
+    Timeline t4 = tl;
+    t4.setClipFx(ida, 2.0, 0, 0);
+    const XmlResult r = buildMltXml(t4, st);
+    CHECK(r.ok);
+    CHECK(contains(r.xml, "<property name=\"gain\">10=0;30=0.5;79=0.5;109=0</property>"));
+    CHECK(contains(r.xml, "<property name=\"level\">10=0;30=1;79=1;109=0</property>"));
+    CHECK(contains(r.xml, "<property name=\"gain\">0=2</property>"));        // audio: solo volumen
+    std::size_t brightness = 0;
+    for (std::size_t p = 0; (p = r.xml.find(">brightness<", p)) != std::string::npos; ++p) ++brightness;
+    CHECK(brightness == 1);                                                    // no en pistas de audio
+    // Sin efectos no se emite ningún filtro.
+    Timeline plain({30, 1});
+    plain.addTrack("V1", TrackKind::Video);
+    plain.addClip(0, makeClip(0, 10));
+    CHECK(!contains(buildMltXml(plain, st).xml, "<filter>"));
+
+    // Proyecto: ida y vuelta, y compatibilidad con archivos sin los campos nuevos.
+    Project p; p.timeline = t4;
+    Project q; std::string err;
+    CHECK(fromJson(toJson(p), q, err));
+    CHECK(q.timeline.track(v).clips[0].volume == 0.5 && q.timeline.track(v).clips[0].fadeIn == 20 && q.timeline.track(v).clips[0].fadeOut == 30);
+    CHECK(q.timeline.track(a).clips[0].volume == 2.0);
+    Project plainP; plainP.timeline = plain;
+    CHECK(!contains(toJson(plainP), "volume"));
+    Project q2;
+    CHECK(fromJson(toJson(plainP), q2, err) && q2.timeline.track(0).clips[0].volume == 1.0);
+}
+
 int main() {
     testTimecode();
     testAddAndOverlap();
@@ -440,6 +501,7 @@ int main() {
     testProjectRejectsBadFiles();
     testProjectFiles();
     testMltXml();
+    testClipFx();
     testMediaProbe();
     std::printf("%d comprobaciones, %d fallos\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;

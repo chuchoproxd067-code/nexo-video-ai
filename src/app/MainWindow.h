@@ -38,6 +38,7 @@ private:
     void addToTimeline(QListWidgetItem* item);
     void exportVideo();
     void playExternal();
+    void editClipFx();
     bool beginRender(const QString& title, const nexo::ExportSettings& st, const QString& out);
     void rebuildLibrary();
     void onProbed(const QString& path, const nexo::MediaInfo& info);
