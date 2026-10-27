@@ -85,6 +85,8 @@ jobs:
             pacman -Qi mingw-w64-ucrt-x86_64-mlt mingw-w64-ucrt-x86_64-ffmpeg mingw-w64-ucrt-x86_64-qt6-base | grep -E "^(Name|Version|Licenses)"
             ffmpeg -hide_banner -version | grep -E "^(ffmpeg version|configuration)"
           } 2>&1 | tee evidence/versions.txt
+          echo "::notice title=Versiones y licencias (pacman)::$(grep -E '^(Name|Version|Licenses)' evidence/versions.txt | tr '\n' '|')"
+          echo "::notice title=FFmpeg: configuración::$(ffmpeg -hide_banner -version | grep '^configuration' | tr ' ' '\n' | grep -E 'enable-(gpl|nonfree|version3|libx264|libx265)' | tr '\n' ' ')"
 
       - name: Package
         shell: msys2 {0}
@@ -112,7 +114,7 @@ jobs:
           for f in bin/nexo-video-ai.exe bin/melt.exe $(find lib bin/platforms bin/styles -name '*.dll'); do
             for n in $(objdump -p "$f" 2>/dev/null | awk '/DLL Name:/ {print $3}'); do
               low=$(echo "$n" | tr 'A-Z' 'a-z')
-              case "$low" in api-ms-win-*|ext-ms-win-*) continue;; esac
+              case "$low" in api-ms-win-*|ext-ms-win-*|kernel32.dll|msvcrt.dll|user32.dll|ws2_32.dll|advapi32.dll|shell32.dll|ole32.dll|gdi32.dll|bcrypt.dll|crypt32.dll) continue;; esac
               ls bin | grep -qix "$n" && continue
               ls /c/Windows/System32 | grep -qix "$n" && continue
               missing="$missing $f needs $n;"

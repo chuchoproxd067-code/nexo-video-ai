@@ -6,11 +6,11 @@ Editor de video de escritorio para Windows con asistente de IA (en desarrollo).
 
 ## Descargar una compilación
 
-1. Abre la pestaña **Actions** del repositorio y entra en la ejecución más reciente de *Windows build*.
-2. Si tiene el check verde, baja a **Artifacts** y descarga `NEXO-VIDEO-AI-windows-x64-<commit>.zip`.
-3. Descomprime y ejecuta `nexo-video-ai.exe`.
+1. Abre la pestaña **Actions** y entra en la ejecución más reciente de *Windows build (MSYS2 + MLT)*.
+2. Si tiene el check verde, baja a **Artifacts** y descarga `NEXO-VIDEO-AI-msys2-windows-x64-<commit>`.
+3. Descomprime todo y ejecuta `Iniciar NEXO VIDEO AI.cmd` (o `bin\nexo-video-ai.exe`).
 
-Para lanzar una compilación a mano: **Actions → Windows build → Run workflow**.
+Para lanzar una compilación a mano: **Actions → Windows build (MSYS2 + MLT) → Run workflow**. El ZIP incluye `melt.exe` y los módulos de MLT, con los que se exportará el video.
 
 ## Documentación
 - [STATUS.md](STATUS.md): qué funciona y qué falta, con evidencia.

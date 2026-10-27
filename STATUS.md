@@ -9,11 +9,13 @@ Fase actual: **2 — Base y compilación remota** (en curso).
 | Conversión de tiempos | COMPLETA Y VERIFICADA | Mismas pruebas; sin drop-frame |
 | Ventana Qt con línea de tiempo de demostración | PARCIAL: compila, empaqueta y abre | Run #1 de *Windows build* en verde (commit 7b2298b): compila con MSVC y Qt 6.8, pasa `ctest`, el ZIP empaquetado arranca con `--version`. El propietario confirmó a mano que el ZIP descargado abre la interfaz. El propietario confirmó a mano que **Deshacer y Rehacer funcionan**. Sin confirmar a mano: Abrir/Guardar |
 | Workflow de Windows | COMPLETA Y VERIFICADA (primera versión) | Run #1: éxito en 2 min 10 s; artefacto de 45,9 MB. Aviso de GitHub: Node.js 20 obsoleto en `checkout@v4`, `upload-artifact@v4` y `msvc-dev-cmd@v1` (sin efecto por ahora) |
-| Viabilidad de MLT + FFmpeg en Windows | PARCIAL | El primer intento (adb081f) falló. Con UCRT64 (e767e61) el job `mlt` terminó en verde, y su workflow solo pasa si `ffprobe` encuentra el MP4 de 75 fotogramas. **No se ha leído la evidencia** (licencias, capacidades) |
+| Viabilidad de MLT + FFmpeg en Windows | COMPLETA Y VERIFICADA (render) | Run de *Windows build (MSYS2 + MLT)* en commit 1e3fd78: `melt` renderiza el XML generado por NEXO y `ffprobe` confirma 640x360, audio y 120 fotogramas, tanto con MSYS2 como con el paquete SIN MSYS2 en el PATH. Licencias: ver la fila de auditoría (pendiente) |
 | Formato de proyecto, guardar y abrir (núcleo) | COMPLETA Y VERIFICADA (núcleo) | 143 comprobaciones en total, 0 fallos (GCC 13, Linux): ida y vuelta, archivos dañados, esquema futuro, solapes, ids duplicados, guardado atómico y detección de medios que faltan. Documentado en `docs/PROJECT_FORMAT.md`. Limitación: rutas absolutas, sin relocalización |
 | Botones Abrir/Guardar en la ventana | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Compila en Windows (*Windows build* en verde en ec2f8b7); falta probarlo a mano |
 | Importación, biblioteca, vista previa | PENDIENTE | Fase 3 |
-| Generador de MLT XML (línea de tiempo → render con `melt`) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | 159 comprobaciones en Linux (estructura del XML, huecos, escapes, errores, XML bien formado con Python). Falta el render real con `melt`: lo prueba `windows-msys2.yml`, aún sin ejecutar |
+| Generador de MLT XML (línea de tiempo → render con `melt`) | COMPLETA Y VERIFICADA (render básico) | 159 comprobaciones en Linux + render real en CI: 2 clips de video en secuencia y un clip de audio en otra pista (mezcla y composición). Sin probar: transiciones, efectos, imágenes, clips con velocidad distinta, resoluciones distintas a la del proyecto |
+| Paquete de Windows con MSYS2 (`bin/`, `lib/mlt`, `share/mlt`) | PARCIAL | Se compila, empaqueta y arranca en CI sin MSYS2 (`--version`). **El propietario aún no ha abierto este ZIP a mano.** Tamaño y tiempo de compilación sin medir |
+| Auditoría de licencias del paquete | PENDIENTE | Las anotaciones del CI ya muestran las licencias de pacman y la configuración de FFmpeg; falta revisarlas y completar `THIRD_PARTY_LICENSES.md` |
 | Motor multimedia en la app (importar, vista previa) | PENDIENTE | Decisiones 0003 y 0004 |
 | Exportación de video desde la app | PENDIENTE | Falta el botón y lanzar `melt` desde la app (Fase 3) |
 | Asistente de IA | PENDIENTE | Fase 5 |
@@ -24,4 +26,4 @@ Fase actual: **2 — Base y compilación remota** (en curso).
 - Las acciones de GitHub usan versiones por etiqueta mayor (`@v4`); conviene fijarlas por SHA antes de la Fase 7.
 
 ## Próxima tarea
-Ver el resultado de *Windows build (MSYS2 + MLT)*: compila con GCC, pasa pruebas, `melt` renderiza el MP4 del proyecto y el paquete funciona sin MSYS2. Si pasa: retirar el workflow MSVC, añadir el botón Exportar (lanza `melt`) y la importación con lectura de duración.
+Que el propietario abra a mano el ZIP de *Windows build (MSYS2 + MLT)*. Después: retirar el workflow MSVC, añadir el botón Exportar (la app lanza `bin\melt.exe` con el XML generado) y la importación con lectura de duración.
