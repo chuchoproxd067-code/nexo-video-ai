@@ -92,19 +92,24 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path dist/NEXO-VIDEO-AI -DestinationPath NEXO-VIDEO-AI-msys2-windows-x64.zip
 
-      # Diagnóstico: DLL que faltan en el paquete (aparece como anotación del job).
+      # Diagnóstico: importaciones de cada binario que no están en el paquete ni en
+      # System32 (los módulos de MLT buscan sus dependencias en la carpeta raíz).
       - name: Diagnose package dependencies
         continue-on-error: true
         shell: msys2 {0}
         run: |
           cd dist/NEXO-VIDEO-AI
           missing=""
-          for f in nexo-video-ai.exe melt.exe $(find lib -name '*.dll') $(find platforms -name '*.dll'); do
-            m=$(PATH=/c/Windows/System32:/usr/bin ldd "$f" < /dev/null 2>/dev/null | grep -i "not found" | grep -v -i "api-ms-win-" | tr -s ' ' | tr '\n' ';' || true)
-            [ -n "$m" ] && missing="$missing $f => $m |"
+          for f in nexo-video-ai.exe melt.exe $(find lib platforms styles -name '*.dll'); do
+            for n in $(objdump -p "$f" 2>/dev/null | awk '/DLL Name:/ {print $3}'); do
+              low=$(echo "$n" | tr 'A-Z' 'a-z')
+              case "$low" in api-ms-win-*|ext-ms-win-*) continue;; esac
+              [ -f "$n" ] && continue
+              ls /c/Windows/System32 | grep -qi "^$n$" && continue
+              missing="$missing $f needs $n;"
+            done
           done
-          if [ -n "$missing" ]; then echo "::error title=DLL que faltan en el paquete::${missing}"; else echo "Sin DLL faltantes según ldd"; fi
-          ls | head -80 | tr '\n' ' '
+          if [ -n "$missing" ]; then echo "::error title=DLL que faltan en el paquete::${missing}"; else echo "Todas las importaciones están en el paquete o en System32"; fi
 
       # Se ejecuta con un PATH que NO incluye MSYS2: solo lo que hay en el ZIP.
       - name: Smoke test - packaged app
@@ -119,6 +124,34 @@ jobs:
             Write-Host "::error title=nexo-video-ai.exe empaquetado no arrancó::código de salida $($p.ExitCode) ($hex). 0xC0000135 = falta una DLL; 0xC000007B = DLL de arquitectura incorrecta."
             exit 1
           }
+
+      # Carga cada módulo de MLT con LoadLibrary (igual que hace MLT) y anota el código
+      # de error de Windows: 126 = falta una DLL de la que depende, 193 = arquitectura
+      # incorrecta, 127 = función no encontrada (versión de DLL distinta).
+      - name: Diagnose MLT module loading
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $pkg = (Resolve-Path smoke/NEXO-VIDEO-AI).Path
+          $env:PATH = "$pkg;$env:SystemRoot\System32;$env:SystemRoot"
+          Add-Type -TypeDefinition @"
+          using System; using System.Runtime.InteropServices;
+          public static class W {
+            [DllImport("kernel32", SetLastError=true, CharSet=CharSet.Unicode)]
+            public static extern IntPtr LoadLibraryW(string p);
+          }
+          "@
+          $mods = Get-ChildItem "$pkg\lib\mlt" -Filter *.dll -ErrorAction SilentlyContinue
+          $lines = @("módulos encontrados: $($mods.Count); carpeta raíz del paquete: $((Get-ChildItem $pkg -Filter *.dll).Count) DLL")
+          foreach ($m in $mods) {
+            $h = [W]::LoadLibraryW($m.FullName)
+            if ($h -eq [IntPtr]::Zero) { $lines += "FALLA $($m.Name): error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())" }
+            else { $lines += "ok $($m.Name)" }
+          }
+          $bad = $lines | Where-Object { $_ -like 'FALLA*' }
+          $head = $lines[0]
+          if ($bad) { Write-Host "::error title=Módulos de MLT que no cargan::$head%0A$($bad -join '%0A')" }
+          else { Write-Host "::notice title=Módulos de MLT::$head. Todos cargan.%0A$(($lines | Select-Object -Skip 1 | Select-Object -First 40) -join '%0A')" }
 
       - name: Smoke test - packaged melt renders the NEXO project
         shell: pwsh
