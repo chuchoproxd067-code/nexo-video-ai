@@ -91,7 +91,9 @@ jobs:
       - name: Package
         shell: msys2 {0}
         run: |
-          scripts/package_windows_msys2.sh build/src/app/nexo-video-ai.exe dist/NEXO-VIDEO-AI
+          scripts/package_windows_msys2.sh build/src/app/nexo-video-ai.exe dist/NEXO-VIDEO-AI 2>&1 | tee evidence/package.log
+          om="$(grep OMITIDO evidence/package.log | tr '\n' '|')"
+          if [ -n "$om" ]; then echo "::warning title=Módulos de MLT omitidos del paquete::$om"; else echo "::notice title=Módulos de MLT::ninguno omitido"; fi
           {
             echo "NEXO VIDEO AI"
             echo "commit:  ${{ github.sha }}"
@@ -162,7 +164,8 @@ jobs:
                    -ArgumentList "-verbose","`"$proj`"","-consumer","avformat:`"$out`"","vcodec=libx264","acodec=aac" `
                    -Wait -PassThru -RedirectStandardError $log -RedirectStandardOutput "$log.out" -NoNewWindow
             $ok = ($m.ExitCode -eq 0) -and (Test-Path $out)
-            $first = (Get-Content $log -TotalCount 3 -ErrorAction SilentlyContinue) -join ' / '
+            $lines = @(Get-Content $log -ErrorAction SilentlyContinue | Where-Object { $_ -and $_ -notmatch '^No (LADSPA|LV2|VST2)' })
+            $first = ($lines | Select-Object -Last 8) -join ' / '
             $summary += "$($v.n) => " + $(if ($ok) { 'FUNCIONA' } else { "falla (código $($m.ExitCode)): $first" })
             if ($ok -and -not $winner) { $winner = $v.n; break }
           }
