@@ -120,6 +120,14 @@ jobs:
             done
           done
           if [ -n "$missing" ]; then echo "::error title=DLL que faltan en el paquete::${missing}"; else echo "Todas las importaciones están en el paquete o en System32"; fi
+          {
+            echo "candidatos lib: $(find /ucrt64/lib -maxdepth 1 -name 'mlt*' | tr '\n' ' ')"
+            echo "candidatos share: $(find /ucrt64/share -maxdepth 1 -name 'mlt*' | tr '\n' ' ')"
+            echo "share/mlt del paquete: $(ls share/mlt 2>&1 | head -20 | tr '\n' ' ')"
+            echo "profiles en origen: $(ls /ucrt64/share/mlt*/profiles 2>&1 | head -5 | tr '\n' ' ')"
+            echo "lib/mlt del paquete: $(ls lib/mlt | head -40 | tr '\n' ' ')"
+          } > ../../evidence/package-listing.txt
+          echo "::notice title=Listado del paquete::$(cat ../../evidence/package-listing.txt | tr '\n' '|')"
 
       # Se ejecuta con un PATH que NO incluye MSYS2: solo lo que hay en el ZIP.
       - name: Smoke test - packaged app
@@ -178,11 +186,14 @@ jobs:
             @{ n='B: MLT_REPOSITORY con /';              path="$pkg;$sys"; repo=("$pkg\lib\mlt" -replace '\\','/'); data=("$pkg\share\mlt" -replace '\\','/'); cwd=$root },
             @{ n='C: sin variables, cwd=paquete';        path="$pkg;$sys"; repo=$null; data=$null; cwd=$pkg },
             @{ n='D: MLT_REPOSITORY con barra final';    path="$pkg;$sys"; repo="$pkg\lib\mlt\"; data="$pkg\share\mlt\"; cwd=$root },
-            @{ n='E: solo MLT_DATA';                     path="$pkg;$sys"; repo=$null; data="$pkg\share\mlt"; cwd=$pkg }
+            @{ n='E: solo MLT_DATA';                     path="$pkg;$sys"; repo=$null; data="$pkg\share\mlt"; cwd=$pkg },
+            @{ n='F: MLT_REPOSITORY = raíz del paquete'; path="$pkg;$sys"; repo=$pkg; data="$pkg\share\mlt"; cwd=$root },
+            @{ n='G: DLL copiadas junto a los módulos';  path="$pkg;$sys"; repo="$pkg\lib\mlt"; data="$pkg\share\mlt"; cwd=$root; prep=$true }
           )
           $summary = @(); $winner = $null
           foreach ($v in $variants) {
             Remove-Item $out -ErrorAction SilentlyContinue
+            if ($v.prep) { Get-ChildItem $pkg -Filter *.dll | ForEach-Object { Copy-Item $_.FullName "$pkg\lib\mlt" -Force } }
             $env:PATH = $v.path
             if ($v.repo) { $env:MLT_REPOSITORY = $v.repo } else { Remove-Item Env:MLT_REPOSITORY -ErrorAction SilentlyContinue }
             if ($v.data) { $env:MLT_DATA = $v.data } else { Remove-Item Env:MLT_DATA -ErrorAction SilentlyContinue }
