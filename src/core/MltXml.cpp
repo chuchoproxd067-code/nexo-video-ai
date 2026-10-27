@@ -79,9 +79,20 @@ XmlResult buildMltXml(const Timeline& tl, const ExportSettings& st) {
             x << "  <producer id=\"clip_" << c.id << "\">\n"
               << "    <property name=\"resource\">" << esc(normalizePath(c.mediaPath)) << "</property>\n";
             const bool fades = c.fadeIn > 0 || c.fadeOut > 0;
-            if (c.volume != 1.0 || fades)
+            // Verificado con melt real: `volume` NO acepta gain animado ("0=0;30=1" deja el audio mudo).
+            // Se usa ganancia constante + rampas con in/out (gain -> end) para los fundidos.
+            const Frame srcEnd = c.sourceIn + c.duration - 1;
+            if (c.volume != 1.0)
                 x << "    <filter>\n      <property name=\"mlt_service\">volume</property>\n"
-                  << "      <property name=\"gain\">" << fadeKeyframes(c, c.volume) << "</property>\n    </filter>\n";
+                  << "      <property name=\"gain\">" << c.volume << "</property>\n    </filter>\n";
+            if (c.fadeIn > 0)
+                x << "    <filter in=\"" << c.sourceIn << "\" out=\"" << c.sourceIn + c.fadeIn - 1 << "\">\n"
+                  << "      <property name=\"mlt_service\">volume</property>\n"
+                  << "      <property name=\"gain\">0</property>\n      <property name=\"end\">1</property>\n    </filter>\n";
+            if (c.fadeOut > 0)
+                x << "    <filter in=\"" << srcEnd - c.fadeOut + 1 << "\" out=\"" << srcEnd << "\">\n"
+                  << "      <property name=\"mlt_service\">volume</property>\n"
+                  << "      <property name=\"gain\">1</property>\n      <property name=\"end\">0</property>\n    </filter>\n";
             if (fades && tl.track(t).kind == TrackKind::Video)
                 x << "    <filter>\n      <property name=\"mlt_service\">brightness</property>\n"
                   << "      <property name=\"level\">" << fadeKeyframes(c, 1.0) << "</property>\n    </filter>\n";

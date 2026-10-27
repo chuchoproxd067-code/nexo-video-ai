@@ -116,7 +116,7 @@ jobs:
           echo "::notice title=Fotograma de vista previa::$info"
           echo "$info" | grep -q "width=640" && echo "$info" | grep -q "height=360"
 
-      # Volumen y fundidos: el render real debe oscurecer el primer y último fotograma y bajar el audio ~6 dB.
+      # Volumen y fundidos: el render real debe oscurecer el primer y último fotograma (clip con sourceIn=30) y bajar el audio ~6 dB.
       - name: Render clip with volume and fades
         shell: msys2 {0}
         run: |
@@ -124,12 +124,13 @@ jobs:
           grep -A3 '<filter>' evidence/fx.mlt | head -12
           melt evidence/fx.mlt -consumer avformat:evidence/fx.mp4 vcodec=libx264 acodec=aac > evidence/fx.log 2>&1 || true
           ffmpeg -hide_banner -i evidence/fx.mp4 -vf signalstats,metadata=print:key=lavfi.signalstats.YAVG -an -f null - 2>&1 | grep -o 'YAVG=[0-9.]*' > evidence/fx_yavg.txt
-          y0=$(sed -n 1p evidence/fx_yavg.txt | cut -d= -f2); ymid=$(sed -n 61p evidence/fx_yavg.txt | cut -d= -f2); yend=$(sed -n 120p evidence/fx_yavg.txt | cut -d= -f2)
+          y0=$(sed -n 1p evidence/fx_yavg.txt | cut -d= -f2); ymid=$(sed -n 46p evidence/fx_yavg.txt | cut -d= -f2); yend=$(sed -n 90p evidence/fx_yavg.txt | cut -d= -f2)
           vol_fx=$(ffmpeg -hide_banner -i evidence/fx.mp4 -af volumedetect -vn -f null - 2>&1 | grep -o 'max_volume: [-0-9.]*' | cut -d' ' -f2)
+          vol_start=$(ffmpeg -hide_banner -i evidence/fx.mp4 -af atrim=0:0.1,volumedetect -vn -f null - 2>&1 | grep -o 'max_volume: [-0-9.]*' | cut -d' ' -f2)
           vol_orig=$(ffmpeg -hide_banner -i evidence/clipA.mp4 -af volumedetect -vn -f null - 2>&1 | grep -o 'max_volume: [-0-9.]*' | cut -d' ' -f2)
-          msg="YAVG inicio=$y0 medio=$ymid final=$yend; max_volume fx=$vol_fx original=$vol_orig dB"
+          msg="YAVG inicio=$y0 medio=$ymid final=$yend; max_volume fx=$vol_fx primeros 0.1 s=$vol_start original=$vol_orig dB"
           echo "::notice title=Volumen y fundidos (render real)::$msg"
-          awk -v a="$y0" -v b="$ymid" -v c="$yend" -v f="$vol_fx" -v o="$vol_orig" 'BEGIN{ ok=(b>40 && a<b*0.25 && c<b*0.35 && (o-f)>4 && (o-f)<8); exit ok?0:1 }' || { echo "::error title=Volumen y fundidos::no se cumplen las condiciones: $msg"; exit 1; }
+          awk -v a="$y0" -v b="$ymid" -v c="$yend" -v f="$vol_fx" -v o="$vol_orig" -v s0="$vol_start" 'BEGIN{ ok=(s0<o-12 && b>40 && a<b*0.25 && c<b*0.35 && (o-f)>4 && (o-f)<12); exit ok?0:1 }' || { echo "::error title=Volumen y fundidos::no se cumplen las condiciones: $msg"; exit 1; }
 
       # Diagnóstico: qué sintaxis del filtro volume de melt funciona para ganancia constante, animada y rampa.
       - name: Diagnose melt volume filter syntax

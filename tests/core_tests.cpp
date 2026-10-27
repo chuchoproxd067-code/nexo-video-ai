@@ -465,9 +465,11 @@ static void testClipFx() {
     t4.setClipFx(ida, 2.0, 0, 0);
     const XmlResult r = buildMltXml(t4, st);
     CHECK(r.ok);
-    CHECK(contains(r.xml, "<property name=\"gain\">10=0;30=0.5;79=0.5;109=0</property>"));
+    CHECK(contains(r.xml, "<property name=\"gain\">0.5</property>"));                         // ganancia constante
+    CHECK(contains(r.xml, "<filter in=\"10\" out=\"29\">"));                                  // rampa de entrada
+    CHECK(contains(r.xml, "<filter in=\"80\" out=\"109\">"));                                 // rampa de salida
     CHECK(contains(r.xml, "<property name=\"level\">10=0;30=1;79=1;109=0</property>"));
-    CHECK(contains(r.xml, "<property name=\"gain\">0=2</property>"));        // audio: solo volumen
+    CHECK(contains(r.xml, "<property name=\"gain\">2</property>"));          // audio: solo volumen
     std::size_t brightness = 0;
     for (std::size_t p = 0; (p = r.xml.find(">brightness<", p)) != std::string::npos; ++p) ++brightness;
     CHECK(brightness == 1);                                                    // no en pistas de audio

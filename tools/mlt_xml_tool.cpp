@@ -16,10 +16,10 @@ int main(int argc, char** argv) {
         return 2;
     }
     nexo::Timeline tl({30, 1});
-    if (fx) {   // un solo clip de 120 fotogramas con volumen 0.5 y fundidos de 30 fotogramas
+    if (fx) {   // un solo clip de 90 fotogramas (desde el 30 del medio) con volumen 0.5 y fundidos de 30 fotogramas
         const auto v = tl.addTrack("V1", nexo::TrackKind::Video);
         nexo::Clip c;
-        c.mediaPath = argv[2]; c.sourceIn = 0; c.duration = 120; c.timelineStart = 0;
+        c.mediaPath = argv[2]; c.sourceIn = 30; c.duration = 90; c.timelineStart = 0;
         c.volume = 0.5; c.fadeIn = 30; c.fadeOut = 30;
         tl.addClip(v, c);
         nexo::ExportSettings st; st.width = 640; st.height = 360;
