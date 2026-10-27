@@ -194,6 +194,21 @@ jobs:
           [ "$n" -ge 14 ] || { echo "::error title=Recursos de ejemplo::solo $n archivos"; rc=1; }
           exit $rc
 
+      # Qué servicios (filtros, productores, transiciones) trae realmente el MLT de MSYS2.
+      - name: List melt services
+        if: always()
+        continue-on-error: true
+        shell: msys2 {0}
+        run: |
+          for k in producers filters transitions consumers; do
+            melt -query $k 2>/dev/null | grep -E '^ *- ' | sed 's/^ *- //' | sort | tr '\n' ' ' > evidence/services_$k.txt
+            echo "::notice title=melt $k::$(cut -c1-3800 evidence/services_$k.txt)"
+          done
+          ls /ucrt64/share/mlt/lumas 2>/dev/null | head -5 | tr '\n' ' ' | sed 's/^/lumas: /'; echo
+          for d in /ucrt64/share/mlt/lumas/*; do [ -d "$d" ] && echo "::notice title=lumas $(basename $d)::$(ls $d | wc -l) archivos: $(ls $d | head -40 | tr '\n' ' ')"; done
+          fc-list 2>/dev/null | head -3 || true
+          ls /ucrt64/share/fonts 2>/dev/null | head || true
+
       - name: Render NEXO timeline with melt (MSYS2 install)
         shell: msys2 {0}
         run: melt evidence/proj.mlt -consumer avformat:evidence/out_msys.mp4 vcodec=libx264 acodec=aac 2>&1 | tee evidence/melt-msys.log
