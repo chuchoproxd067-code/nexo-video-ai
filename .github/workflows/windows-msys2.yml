@@ -163,23 +163,40 @@ jobs:
           if ($bad) { Write-Host "::error title=Módulos de MLT que no cargan::$head%0A$($bad -join '%0A')" }
           else { Write-Host "::notice title=Módulos de MLT::$head. Todos cargan.%0A$(($lines | Select-Object -Skip 1 | Select-Object -First 40) -join '%0A')" }
 
+      # Prueba varias formas de lanzar el melt del paquete y deja constancia de cuál funciona.
+      # La aplicación usará la primera que resulte correcta.
       - name: Smoke test - packaged melt renders the NEXO project
         shell: pwsh
         run: |
+          $root = (Get-Location).Path
           $pkg = (Resolve-Path smoke/NEXO-VIDEO-AI).Path
-          # La aplicación lanzará melt con el PATH apuntando a su carpeta: MLT carga los módulos
-          # buscando sus DLL desde el PATH, no desde la carpeta del ejecutable.
-          $env:PATH = "$pkg;$env:SystemRoot\System32;$env:SystemRoot"
-          $env:MLT_REPOSITORY = "$pkg\lib\mlt"
-          $env:MLT_DATA = "$pkg\share\mlt"
-          $m = Start-Process "$pkg\melt.exe" -ArgumentList "evidence/proj.mlt","-consumer","avformat:evidence/out_pkg.mp4","vcodec=libx264","acodec=aac" `
-                 -Wait -PassThru -RedirectStandardError evidence/melt-pkg.log -RedirectStandardOutput evidence/melt-pkg.out -NoNewWindow
-          $hex = '0x{0:X8}' -f $m.ExitCode
-          if ($m.ExitCode -ne 0 -or -not (Test-Path evidence/out_pkg.mp4)) {
-            $tail = ((Get-Content evidence/melt-pkg.log -Tail 25 -ErrorAction SilentlyContinue) -join "%0A")
-            Write-Host "::error title=melt empaquetado falló (código $($m.ExitCode) $hex)::$tail"
-            exit 1
+          $proj = "$root\evidence\proj.mlt"
+          $out = "$root\evidence\out_pkg.mp4"
+          $sys = "$env:SystemRoot\System32;$env:SystemRoot"
+          $variants = @(
+            @{ n='A: PATH=paquete, MLT_REPOSITORY con \'; path="$pkg;$sys"; repo="$pkg\lib\mlt"; data="$pkg\share\mlt"; cwd=$root },
+            @{ n='B: MLT_REPOSITORY con /';              path="$pkg;$sys"; repo=("$pkg\lib\mlt" -replace '\\','/'); data=("$pkg\share\mlt" -replace '\\','/'); cwd=$root },
+            @{ n='C: sin variables, cwd=paquete';        path="$pkg;$sys"; repo=$null; data=$null; cwd=$pkg },
+            @{ n='D: MLT_REPOSITORY con barra final';    path="$pkg;$sys"; repo="$pkg\lib\mlt\"; data="$pkg\share\mlt\"; cwd=$root },
+            @{ n='E: solo MLT_DATA';                     path="$pkg;$sys"; repo=$null; data="$pkg\share\mlt"; cwd=$pkg }
+          )
+          $summary = @(); $winner = $null
+          foreach ($v in $variants) {
+            Remove-Item $out -ErrorAction SilentlyContinue
+            $env:PATH = $v.path
+            if ($v.repo) { $env:MLT_REPOSITORY = $v.repo } else { Remove-Item Env:MLT_REPOSITORY -ErrorAction SilentlyContinue }
+            if ($v.data) { $env:MLT_DATA = $v.data } else { Remove-Item Env:MLT_DATA -ErrorAction SilentlyContinue }
+            $log = "$root\evidence\melt-pkg-$($v.n.Substring(0,1)).log"
+            $m = Start-Process "$pkg\melt.exe" -WorkingDirectory $v.cwd `
+                   -ArgumentList "-verbose","`"$proj`"","-consumer","avformat:`"$out`"","vcodec=libx264","acodec=aac" `
+                   -Wait -PassThru -RedirectStandardError $log -RedirectStandardOutput "$log.out" -NoNewWindow
+            $ok = ($m.ExitCode -eq 0) -and (Test-Path $out)
+            $first = (Get-Content $log -TotalCount 3 -ErrorAction SilentlyContinue) -join ' / '
+            $summary += "$($v.n) => " + $(if ($ok) { 'FUNCIONA' } else { "falla (código $($m.ExitCode)): $first" })
+            if ($ok -and -not $winner) { $winner = $v.n; break }
           }
+          if ($winner) { Write-Host "::notice title=melt empaquetado funciona con la variante::$winner%0A$($summary -join '%0A')" }
+          else { Write-Host "::error title=melt empaquetado: ninguna variante funcionó::$($summary -join '%0A')"; exit 1 }
 
       - name: Verify exported videos
         shell: msys2 {0}
