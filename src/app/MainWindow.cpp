@@ -5,7 +5,10 @@
 
 #include <QAction>
 #include <QDir>
+#include <QDesktopServices>
 #include <QDockWidget>
+#include <QStandardPaths>
+#include <QUrl>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QInputDialog>
@@ -73,6 +76,7 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
     tb->addSeparator();
     auto* importA = tb->addAction("Importar medios…");
     auto* addA = tb->addAction("Añadir a la línea de tiempo");
+    auto* playA = tb->addAction("Reproducir");
     auto* exportA = tb->addAction("Exportar…");
     tb->addSeparator();
     auto* split = tb->addAction("Dividir en el cursor");
@@ -110,6 +114,7 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
     });
     connect(library_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* it) { addToTimeline(it); });
     connect(exportA, &QAction::triggered, this, [this] { exportVideo(); });
+    connect(playA, &QAction::triggered, this, [this] { playExternal(); });
     connect(split, &QAction::triggered, this, [this] {
         const nexo::ClipId id = timeline_->selectedClip();
         if (id == 0) { statusBar()->showMessage("Selecciona un clip (clic) y coloca el cursor donde dividir.", 5000); return; }
@@ -163,7 +168,15 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
     connect(exporter_, &Exporter::finished, this, [this](bool ok, const QString& message) {
         if (progress_) { progress_->close(); progress_->deleteLater(); progress_ = nullptr; }
         if (!ok) {
+            playPending_ = false;
             QMessageBox::warning(this, "Exportación", message);
+            return;
+        }
+        if (playPending_) {
+            playPending_ = false;
+            if (!QDesktopServices::openUrl(QUrl::fromLocalFile(message)))
+                QMessageBox::warning(this, "Reproducir", "No se pudo abrir el reproductor del sistema. El archivo está en:\n" + message);
+            else statusBar()->showMessage("Reproduciendo en el reproductor del sistema", 5000);
             return;
         }
         statusBar()->showMessage("Exportación terminada; verificando el archivo…");
@@ -299,20 +312,52 @@ void MainWindow::exportVideo() {
     if (out.isEmpty()) return;
     if (!out.endsWith(".mp4", Qt::CaseInsensitive)) out += ".mp4";
 
-    QString err;
-    if (!exporter_->start(tl, st, out, err)) {
-        QMessageBox::warning(this, "Exportar", err);
-        return;
-    }
     verifyFrames_ = tl.duration();
-    progress_ = new QProgressDialog("Exportando…", "Cancelar", 0, 100, this);
-    progress_->setWindowTitle("Exportando video");
+    beginRender("Exportando video", st, out);
+}
+
+bool MainWindow::beginRender(const QString& title, const nexo::ExportSettings& st, const QString& out) {
+    QString err;
+    if (!exporter_->start(history_.timeline(), st, out, err)) {
+        playPending_ = false;
+        QMessageBox::warning(this, title, err);
+        return false;
+    }
+    progress_ = new QProgressDialog(title + "…", "Cancelar", 0, 100, this);
+    progress_->setWindowTitle(title);
     progress_->setWindowModality(Qt::WindowModal);
     progress_->setMinimumDuration(0);
     progress_->setAutoClose(false);
     progress_->setAutoReset(false);
     progress_->setValue(0);
     connect(progress_, &QProgressDialog::canceled, exporter_, &Exporter::cancel);
+    return true;
+}
+
+void MainWindow::playExternal() {
+    if (!exporter_->available()) {
+        QMessageBox::warning(this, "Reproducir", "Esta compilación no incluye melt.");
+        return;
+    }
+    if (exporter_->running()) {
+        QMessageBox::information(this, "Reproducir", "Ya hay un render en curso.");
+        return;
+    }
+    if (history_.timeline().duration() <= 0) {
+        QMessageBox::information(this, "Reproducir", "La línea de tiempo está vacía.");
+        return;
+    }
+    project_.timeline = history_.timeline();
+    if (!project_.missingMedia().empty()) {
+        QMessageBox::warning(this, "Reproducir", "Faltan archivos de medios en el disco.");
+        return;
+    }
+    nexo::ExportSettings st;
+    st.width = 854;
+    st.height = 480;
+    const QString out = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + "/nexo-vista-previa.mp4";
+    playPending_ = true;
+    beginRender("Preparando vista previa", st, out);
 }
 
 void MainWindow::rebuildLibrary() {

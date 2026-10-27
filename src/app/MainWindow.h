@@ -5,6 +5,8 @@
 #include <QString>
 #include <QStringList>
 
+#include "core/MltXml.h"
+
 #include "core/History.h"
 #include "core/MediaProbe.h"
 #include "core/Project.h"
@@ -35,6 +37,8 @@ private:
     void importMedia();
     void addToTimeline(QListWidgetItem* item);
     void exportVideo();
+    void playExternal();
+    bool beginRender(const QString& title, const nexo::ExportSettings& st, const QString& out);
     void rebuildLibrary();
     void onProbed(const QString& path, const nexo::MediaInfo& info);
     void onProbeFailed(const QString& path, const QString& message);
@@ -54,6 +58,7 @@ private:
     QProgressDialog* progress_ = nullptr;
     QHash<QString, nexo::MediaInfo> info_;
     QStringList importErrors_;
+    bool playPending_ = false;      // el render en curso es una vista previa para el reproductor del sistema
     QString verifyPath_;            // archivo exportado pendiente de verificar
     nexo::Frame verifyFrames_ = 0;
 };

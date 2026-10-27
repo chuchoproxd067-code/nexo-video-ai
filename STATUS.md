@@ -17,7 +17,8 @@ Fase actual: **2 — Base y compilación remota** (en curso).
 | Seleccionar clip, cursor, dividir en el cursor, eliminar (ventana) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Usa las operaciones del núcleo ya probadas, con deshacer; falta probar a mano |
 | Arrastrar para mover y recortar clips (ventana) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Las operaciones del núcleo (mover, recortar) están verificadas por pruebas; el arrastre en la ventana no se ha probado a mano |
 | Vista previa de un fotograma (en el cursor) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | `Previewer` pide un PNG a `melt` (`in=N out=N`); el CI comprueba el comando con melt real; falta probarlo a mano |
-| Reproducción (play) | PENDIENTE | Fase 3 |
+| Reproducir (render 480p y abrir en el reproductor del sistema) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Reutiliza el render de `melt` ya verificado en CI; abrir el reproductor no se ha probado a mano |
+| Reproducción integrada en el visor (tiempo real) | PENDIENTE | Requiere Qt Multimedia o un decodificador propio |
 | Generador de MLT XML (línea de tiempo → render con `melt`) | COMPLETA Y VERIFICADA (render básico) | 159 comprobaciones en Linux + render real en CI: 2 clips de video en secuencia y un clip de audio en otra pista (mezcla y composición). Sin probar: transiciones, efectos, imágenes, clips con velocidad distinta, resoluciones distintas a la del proyecto |
 | Paquete de Windows con MSYS2 (`bin/`, `lib/mlt`, `share/mlt`) | PARCIAL | Se compila, empaqueta y arranca en CI sin MSYS2 (`--version`). **El propietario aún no ha abierto este ZIP a mano.** Tamaño y tiempo de compilación sin medir |
 | Auditoría de licencias del paquete | PARCIAL | Inventario de MLT, FFmpeg y Qt en `THIRD_PARTY_LICENSES.md` (FFmpeg es GPL-3.0 con x264/x265 → el proyecto es GPLv3). Falta inventariar las ~160 DLL restantes y añadir los textos de licencia al paquete |
