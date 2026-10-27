@@ -38,6 +38,16 @@ jobs:
             mingw-w64-ucrt-x86_64-mlt
             mingw-w64-ucrt-x86_64-ffmpeg
 
+      # Dependencias opcionales de los módulos de MLT (audio, títulos, filtros). Si un
+      # paquete no existe se avisa y se sigue: el script de empaquetado omite el módulo.
+      - name: Install optional MLT dependencies
+        shell: msys2 {0}
+        run: |
+          for p in fftw libebur128 libsamplerate rubberband lilv sox rtaudio rnnoise qt6-svg; do
+            pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-$p 2>&1 | tail -2 || echo "::warning::paquete no disponible: $p"
+          done
+          ls /ucrt64/bin | grep -i -E "fftw3-3|lilv|ebur128|samplerate|rubberband|sox-3|rtaudio|rnnoise|Qt6Svg" | tr '\n' ' '
+
       - name: Configure
         shell: msys2 {0}
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEXO_GIT_COMMIT="${{ github.sha }}"
@@ -157,7 +167,9 @@ jobs:
         shell: pwsh
         run: |
           $pkg = (Resolve-Path smoke/NEXO-VIDEO-AI).Path
-          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          # La aplicación lanzará melt con el PATH apuntando a su carpeta: MLT carga los módulos
+          # buscando sus DLL desde el PATH, no desde la carpeta del ejecutable.
+          $env:PATH = "$pkg;$env:SystemRoot\System32;$env:SystemRoot"
           $env:MLT_REPOSITORY = "$pkg\lib\mlt"
           $env:MLT_DATA = "$pkg\share\mlt"
           $m = Start-Process "$pkg\melt.exe" -ArgumentList "evidence/proj.mlt","-consumer","avformat:evidence/out_pkg.mp4","vcodec=libx264","acodec=aac" `

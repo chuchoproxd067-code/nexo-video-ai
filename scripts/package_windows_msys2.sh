@@ -68,4 +68,26 @@ for pass in $(seq 1 15); do
   [ "$added" -eq 0 ] && break
 done
 
+# Módulos de MLT cuyas dependencias no se pudieron resolver: se omiten con aviso, para
+# que un módulo opcional roto no impida que MLT cargue los demás.
+in_pkg_or_system() {
+  local n="$1" low
+  low="$(echo "$n" | tr 'A-Z' 'a-z')"
+  case "$low" in api-ms-win-*|ext-ms-win-*) return 0;; esac
+  if ls "$OUT" | grep -qix -- "$n"; then return 0; fi
+  if ls /c/Windows/System32 2>/dev/null | grep -qix -- "$n"; then return 0; fi
+  return 1
+}
+for m in "$OUT"/lib/mlt/*.dll; do
+  [ -f "$m" ] || continue
+  for n in $(objdump -p "$m" 2>/dev/null | awk '/DLL Name:/ {print $3}'); do
+    if ! in_pkg_or_system "$n"; then
+      echo "OMITIDO módulo MLT $(basename "$m"): falta $n"
+      rm -f "$m"
+      break
+    fi
+  done
+done
+echo "Módulos de MLT incluidos: $(ls "$OUT"/lib/mlt/*.dll 2>/dev/null | wc -l)"
+
 echo "Paquete listo en $OUT: $(find "$OUT" -type f | wc -l) archivos, $(du -sh "$OUT" | cut -f1)"
