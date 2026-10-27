@@ -19,7 +19,7 @@ Fase actual: **2 — Base y compilación remota** (en curso).
 | Paquete de Windows con MSYS2 (`bin/`, `lib/mlt`, `share/mlt`) | PARCIAL | Se compila, empaqueta y arranca en CI sin MSYS2 (`--version`). **El propietario aún no ha abierto este ZIP a mano.** Tamaño y tiempo de compilación sin medir |
 | Auditoría de licencias del paquete | PARCIAL | Inventario de MLT, FFmpeg y Qt en `THIRD_PARTY_LICENSES.md` (FFmpeg es GPL-3.0 con x264/x265 → el proyecto es GPLv3). Falta inventariar las ~160 DLL restantes y añadir los textos de licencia al paquete |
 | Motor multimedia en la app (importar, vista previa) | PENDIENTE | Decisiones 0003 y 0004 |
-| Exportación de video desde la app | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Botón Exportar, `Exporter` lanza `melt` y relee el MP4 para verificarlo; el formato de `-progress2` aún no está verificado con la salida real; falta probarlo a mano |
+| Exportación de video desde la app | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Botón Exportar, `Exporter` lanza `melt` y relee el MP4 para verificarlo; el formato de `-progress2` (`Current Frame: N, percentage: N`) está verificado con la salida real de melt en CI; falta probar el botón a mano |
 | Asistente de IA | PENDIENTE | Fase 5 |
 
 ## Limitaciones conocidas
