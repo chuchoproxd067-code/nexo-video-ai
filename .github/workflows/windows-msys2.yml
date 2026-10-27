@@ -73,6 +73,20 @@ jobs:
           build/tests/mlt_xml_tool evidence/proj.mlt evidence/clipA.mp4 evidence/clipB.mp4
           cat evidence/proj.mlt
 
+      # Vuelca lo que melt sabe de un video, un audio y una imagen (duración, tamaño, tasa...).
+      # Se usa para escribir el lector de medios del editor con los nombres reales.
+      - name: Probe media with melt (evidence for the importer)
+        continue-on-error: true
+        shell: msys2 {0}
+        run: |
+          ffmpeg -hide_banner -loglevel error -y -f lavfi -i sine=frequency=440:duration=2 evidence/tone.wav
+          ffmpeg -hide_banner -loglevel error -y -f lavfi -i testsrc=duration=1:size=320x240:rate=1 -frames:v 1 evidence/pic.png
+          for f in clipA.mp4 tone.wav pic.png; do
+            melt "evidence/$f" out=0 -consumer xml > "evidence/probe_$f.mlt" 2>"evidence/probe_$f.err" || true
+            body="$(sed -n '/<producer/,/<\/producer>/p' "evidence/probe_$f.mlt" | head -n 150 | sed 's/^ *//' | cut -c1-110 | tr '\n' '|')"
+            echo "::notice title=Probe $f::${body:0:3800}"
+          done
+
       - name: Render NEXO timeline with melt (MSYS2 install)
         shell: msys2 {0}
         run: melt evidence/proj.mlt -consumer avformat:evidence/out_msys.mp4 vcodec=libx264 acodec=aac 2>&1 | tee evidence/melt-msys.log
