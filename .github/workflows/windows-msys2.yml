@@ -131,6 +131,27 @@ jobs:
           echo "::notice title=Volumen y fundidos (render real)::$msg"
           awk -v a="$y0" -v b="$ymid" -v c="$yend" -v f="$vol_fx" -v o="$vol_orig" 'BEGIN{ ok=(b>40 && a<b*0.25 && c<b*0.35 && (o-f)>4 && (o-f)<8); exit ok?0:1 }' || { echo "::error title=Volumen y fundidos::no se cumplen las condiciones: $msg"; exit 1; }
 
+      # Diagnóstico: qué sintaxis del filtro volume de melt funciona para ganancia constante, animada y rampa.
+      - name: Diagnose melt volume filter syntax
+        continue-on-error: true
+        shell: msys2 {0}
+        run: |
+          vd() { ffmpeg -hide_banner -i "$1" -af "$2volumedetect" -vn -f null - 2>&1 | grep -o 'max_volume: [-0-9.]*' | cut -d' ' -f2; }
+          run() { # nombre, argumentos de filtro...
+            n="$1"; shift
+            melt evidence/clipA.mp4 "$@" -consumer avformat:evidence/vol_$n.mp4 vcodec=libx264 acodec=aac > evidence/vol_$n.log 2>&1 || true
+            echo "$n: todo=$(vd evidence/vol_$n.mp4 '') inicio=$(vd evidence/vol_$n.mp4 'atrim=0:0.5,') medio=$(vd evidence/vol_$n.mp4 'atrim=1.5:2.5,') final=$(vd evidence/vol_$n.mp4 'atrim=3.5:4,')"
+          }
+          {
+            echo "original: todo=$(vd evidence/clipA.mp4 '')"
+            run const -filter volume gain=0.5
+            run anim_simple -filter volume "gain=0=0.5;119=0.5"
+            run anim_ramp -filter volume "gain=0=0;30=1"
+            run rampa_in_out -filter volume gain=0 end=1 in=0 out=29
+            run db -filter volume gain=-6dB
+          } | tee evidence/vol_diag.txt
+          echo "::notice title=Sintaxis de volume en melt::$(tr '\n' '|' < evidence/vol_diag.txt)"
+
       - name: Capture melt progress output format
         continue-on-error: true
         shell: msys2 {0}
