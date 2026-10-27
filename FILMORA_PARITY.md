@@ -24,7 +24,8 @@ IA propia.
 | Audio | Volumen y fundidos por clip | COMPLETA Y VERIFICADA (render); diálogo sin probar | 4 |
 | Audio | Ecualizador, normalizar, reducción de ruido, ducking, mezclador, grabación de voz | PENDIENTE | 4 |
 | Audio | Separar audio del video, cambio de tono | PENDIENTE | 4 |
-| Video | Transiciones (fundido cruzado, deslizar, cortinillas, etc.) | PENDIENTE (siguiente) | 4 |
+| Video | Transición: fundido cruzado | COMPLETA Y VERIFICADA (render); diálogo sin probar | 4 |
+| Video | Otras transiciones (deslizar, cortinillas, zoom, etc.) | PENDIENTE | 4 |
 | Video | Velocidad constante/variable, inversa, congelar fotograma | PENDIENTE | 4 |
 | Video | Recorte (crop), rotar, voltear, escala, posición, opacidad, modos de mezcla | PENDIENTE | 4 |
 | Video | Picture-in-picture, pantalla dividida, máscaras | PENDIENTE | 4 |
