@@ -133,6 +133,7 @@ jobs:
 
       # Diagnóstico: qué sintaxis del filtro volume de melt funciona para ganancia constante, animada y rampa.
       - name: Diagnose melt volume filter syntax
+        if: always()
         continue-on-error: true
         shell: msys2 {0}
         run: |
