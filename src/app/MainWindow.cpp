@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include <algorithm>
+#include <functional>
 
 #include <QAction>
 #include <QDir>
@@ -127,6 +128,20 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
     connect(undo, &QAction::triggered, this, [this] { history_.undo(); refresh(); });
     connect(redo, &QAction::triggered, this, [this] { history_.redo(); refresh(); });
 
+    auto applyEdit = [this](const char* label, std::function<nexo::Result(nexo::Timeline&)> op) {
+        const auto r = history_.apply(label, op);
+        statusBar()->showMessage(r.ok ? QString::fromUtf8(label) : QString::fromStdString(r.error), 5000);
+        refresh();
+    };
+    connect(timeline_, &TimelineWidget::moveRequested, this, [applyEdit](nexo::ClipId id, int tr, nexo::Frame s) {
+        applyEdit("Mover clip", [=](nexo::Timeline& t) { return t.moveClip(id, std::size_t(tr), s); });
+    });
+    connect(timeline_, &TimelineWidget::trimStartRequested, this, [applyEdit](nexo::ClipId id, nexo::Frame d) {
+        applyEdit("Recortar inicio", [=](nexo::Timeline& t) { return t.trimStart(id, d); });
+    });
+    connect(timeline_, &TimelineWidget::trimEndRequested, this, [applyEdit](nexo::ClipId id, nexo::Frame d) {
+        applyEdit("Recortar final", [=](nexo::Timeline& t) { return t.trimEnd(id, d); });
+    });
     connect(timeline_, &TimelineWidget::playheadChanged, this, [this](nexo::Frame) { requestPreview(); });
     connect(previewer_, &Previewer::ready, this, [this](const QImage& img, nexo::Frame) {
         frame_ = img;

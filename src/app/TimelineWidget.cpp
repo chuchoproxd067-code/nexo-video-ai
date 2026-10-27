@@ -4,6 +4,7 @@
 #include <QPainter>
 #include <QPen>
 #include <algorithm>
+#include <cmath>
 
 #include "Theme.h"
 
@@ -39,7 +40,54 @@ void TimelineWidget::mousePressEvent(QMouseEvent* e) {
     playhead_ = f;
     emit playheadChanged(f);
     if (hit != selected_) { selected_ = hit; emit selectionChanged(hit); }
+    drag_ = Drag::None;
+    if (hit != 0 && row >= 0) {
+        for (const nexo::Clip& cl : timeline_.track(std::size_t(row)).clips) {
+            if (cl.id != hit) continue;
+            const double left = kHeaderW + cl.timelineStart * ppf, right = kHeaderW + cl.timelineEnd() * ppf;
+            const double x = e->position().x();
+            drag_ = (x - left < 6 && right - left > 14) ? Drag::TrimStart
+                  : (right - x < 6 && right - left > 14) ? Drag::TrimEnd : Drag::Move;
+        }
+        dragTrack_ = dragRow_ = row;
+        dragStartX_ = e->position().x();
+        dragDelta_ = 0;
+        dragMoved_ = false;
+    }
     update();
+}
+
+int TimelineWidget::rowAt(int y) const {
+    const int r = (y - 8) / (kRowH + 4);
+    return (y >= 8 && r >= 0 && std::size_t(r) < timeline_.trackCount()) ? r : -1;
+}
+
+void TimelineWidget::mouseMoveEvent(QMouseEvent* e) {
+    if (drag_ == Drag::None) return;
+    const double ppf = pxPerFrame();
+    if (ppf <= 0) return;
+    dragDelta_ = nexo::Frame(std::llround((e->position().x() - dragStartX_) / ppf));
+    if (dragDelta_ != 0) dragMoved_ = true;
+    const int r = rowAt(int(e->position().y()));
+    if (drag_ == Drag::Move && r >= 0 && timeline_.track(std::size_t(r)).kind == timeline_.track(std::size_t(dragTrack_)).kind)
+        dragRow_ = r;
+    update();
+}
+
+void TimelineWidget::mouseReleaseEvent(QMouseEvent*) {
+    const Drag d = drag_;
+    drag_ = Drag::None;
+    const nexo::Frame delta = dragDelta_;
+    const bool trackChanged = dragRow_ != dragTrack_;
+    update();
+    if (d == Drag::None || selected_ == 0 || (!dragMoved_ && !trackChanged)) return;
+    if (d == Drag::Move) {
+        for (const nexo::Clip& cl : timeline_.track(std::size_t(dragTrack_)).clips)
+            if (cl.id == selected_) { emit moveRequested(selected_, dragRow_, std::max<nexo::Frame>(0, cl.timelineStart + delta)); break; }
+    } else if (delta != 0) {
+        if (d == Drag::TrimStart) emit trimStartRequested(selected_, delta);
+        else emit trimEndRequested(selected_, delta);
+    }
 }
 
 void TimelineWidget::paintEvent(QPaintEvent*) {
@@ -59,8 +107,15 @@ void TimelineWidget::paintEvent(QPaintEvent*) {
         p.drawText(QRect(8, y, headerW - 8, rowH), Qt::AlignVCenter,
                    QString::fromStdString(track.name));
         for (const nexo::Clip& c : track.clips) {
-            const QRect r(headerW + int(c.timelineStart * pxPerFrame), y,
-                          std::max(2, int(c.duration * pxPerFrame)), rowH);
+            nexo::Frame start = c.timelineStart, len = c.duration;
+            int yy = y;
+            if (drag_ != Drag::None && c.id == selected_) {
+                if (drag_ == Drag::Move) { start = std::max<nexo::Frame>(0, start + dragDelta_); yy = dragRow_ * (rowH + 4) + 8; }
+                else if (drag_ == Drag::TrimStart) { start += dragDelta_; len -= dragDelta_; }
+                else len += dragDelta_;
+                len = std::max<nexo::Frame>(1, len);
+            }
+            const QRect r(headerW + int(start * pxPerFrame), yy, std::max(2, int(len * pxPerFrame)), rowH);
             p.fillRect(r, track.kind == nexo::TrackKind::Video ? theme::clipVideo
                                                                : theme::clipAudio);
             p.setPen(c.id == selected_ ? QPen(Qt::white, 2) : QPen(theme::accent));

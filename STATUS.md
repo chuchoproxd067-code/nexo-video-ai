@@ -15,6 +15,7 @@ Fase actual: **2 — Base y compilación remota** (en curso).
 | Lector de medios (núcleo: `MediaProbe`) | COMPLETA Y VERIFICADA (parser) | 176 comprobaciones en total, 0 fallos; el CI lo contrasta con la salida real de `melt` (video, audio, imagen). Ver el resultado de la ejecución en el commit correspondiente |
 | Importación y biblioteca en la ventana | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Código escrito (`MediaImporter`, `MainWindow`); falta confirmar que compila en CI y probarlo a mano |
 | Seleccionar clip, cursor, dividir en el cursor, eliminar (ventana) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Usa las operaciones del núcleo ya probadas, con deshacer; falta probar a mano |
+| Arrastrar para mover y recortar clips (ventana) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Las operaciones del núcleo (mover, recortar) están verificadas por pruebas; el arrastre en la ventana no se ha probado a mano |
 | Vista previa de un fotograma (en el cursor) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | `Previewer` pide un PNG a `melt` (`in=N out=N`); el CI comprueba el comando con melt real; falta probarlo a mano |
 | Reproducción (play) | PENDIENTE | Fase 3 |
 | Generador de MLT XML (línea de tiempo → render con `melt`) | COMPLETA Y VERIFICADA (render básico) | 159 comprobaciones en Linux + render real en CI: 2 clips de video en secuencia y un clip de audio en otra pista (mezcla y composición). Sin probar: transiciones, efectos, imágenes, clips con velocidad distinta, resoluciones distintas a la del proyecto |
