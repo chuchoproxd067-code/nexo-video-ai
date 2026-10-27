@@ -95,39 +95,31 @@ jobs:
             echo "commit:  ${{ github.sha }}"
             echo "fecha:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "config:  Release, MSYS2 UCRT64, Qt6, MLT + FFmpeg"
-            echo "uso:     nexo-video-ai.exe ; melt.exe necesita MLT_REPOSITORY=lib\\mlt y MLT_DATA=share\\mlt"
+            echo "uso:     Iniciar NEXO VIDEO AI.cmd (o bin\\nexo-video-ai.exe). melt.exe es reubicable: lib\\mlt y share\\mlt junto a bin\\"
           } > dist/NEXO-VIDEO-AI/build-info.txt
 
       - name: Zip
         shell: pwsh
         run: Compress-Archive -Path dist/NEXO-VIDEO-AI -DestinationPath NEXO-VIDEO-AI-msys2-windows-x64.zip
 
-      # Diagnóstico: importaciones de cada binario que no están en el paquete ni en
-      # System32 (los módulos de MLT buscan sus dependencias en la carpeta raíz).
+      # Diagnóstico: importaciones de cada binario que no están en bin/ ni en System32.
       - name: Diagnose package dependencies
         continue-on-error: true
         shell: msys2 {0}
         run: |
           cd dist/NEXO-VIDEO-AI
           missing=""
-          for f in nexo-video-ai.exe melt.exe $(find lib platforms styles -name '*.dll'); do
+          for f in bin/nexo-video-ai.exe bin/melt.exe $(find lib bin/platforms bin/styles -name '*.dll'); do
             for n in $(objdump -p "$f" 2>/dev/null | awk '/DLL Name:/ {print $3}'); do
               low=$(echo "$n" | tr 'A-Z' 'a-z')
               case "$low" in api-ms-win-*|ext-ms-win-*) continue;; esac
-              [ -f "$n" ] && continue
-              ls /c/Windows/System32 | grep -qi "^$n$" && continue
+              ls bin | grep -qix "$n" && continue
+              ls /c/Windows/System32 | grep -qix "$n" && continue
               missing="$missing $f needs $n;"
             done
           done
-          if [ -n "$missing" ]; then echo "::error title=DLL que faltan en el paquete::${missing}"; else echo "Todas las importaciones están en el paquete o en System32"; fi
-          {
-            echo "candidatos lib: $(find /ucrt64/lib -maxdepth 1 -name 'mlt*' | tr '\n' ' ')"
-            echo "candidatos share: $(find /ucrt64/share -maxdepth 1 -name 'mlt*' | tr '\n' ' ')"
-            echo "share/mlt del paquete: $(ls share/mlt 2>&1 | head -20 | tr '\n' ' ')"
-            echo "profiles en origen: $(ls /ucrt64/share/mlt*/profiles 2>&1 | head -5 | tr '\n' ' ')"
-            echo "lib/mlt del paquete: $(ls lib/mlt | head -40 | tr '\n' ' ')"
-          } > ../../evidence/package-listing.txt
-          echo "::notice title=Listado del paquete::$(cat ../../evidence/package-listing.txt | tr '\n' '|')"
+          if [ -n "$missing" ]; then echo "::error title=DLL que faltan en el paquete::${missing}"; else echo "Todas las importaciones están en bin/ o en System32"; fi
+          echo "::notice title=Listado del paquete::raíz: $(ls | tr '\n' ' ')| lib/mlt: $(ls lib/mlt | wc -l) módulos| share/mlt: $(ls share/mlt | tr '\n' ' ')| bin: $(ls bin | wc -l) archivos"
 
       # Se ejecuta con un PATH que NO incluye MSYS2: solo lo que hay en el ZIP.
       - name: Smoke test - packaged app
@@ -136,43 +128,15 @@ jobs:
           Expand-Archive NEXO-VIDEO-AI-msys2-windows-x64.zip -DestinationPath smoke
           $pkg = (Resolve-Path smoke/NEXO-VIDEO-AI).Path
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
-          $p = Start-Process "$pkg\nexo-video-ai.exe" -ArgumentList "--version" -Wait -PassThru
+          $p = Start-Process "$pkg\bin\nexo-video-ai.exe" -ArgumentList "--version" -Wait -PassThru
           $hex = '0x{0:X8}' -f $p.ExitCode
           if ($p.ExitCode -ne 0) {
             Write-Host "::error title=nexo-video-ai.exe empaquetado no arrancó::código de salida $($p.ExitCode) ($hex). 0xC0000135 = falta una DLL; 0xC000007B = DLL de arquitectura incorrecta."
             exit 1
           }
 
-      # Carga cada módulo de MLT con LoadLibrary (igual que hace MLT) y anota el código
-      # de error de Windows: 126 = falta una DLL de la que depende, 193 = arquitectura
-      # incorrecta, 127 = función no encontrada (versión de DLL distinta).
-      - name: Diagnose MLT module loading
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          $pkg = (Resolve-Path smoke/NEXO-VIDEO-AI).Path
-          $env:PATH = "$pkg;$env:SystemRoot\System32;$env:SystemRoot"
-          Add-Type -TypeDefinition @"
-          using System; using System.Runtime.InteropServices;
-          public static class W {
-            [DllImport("kernel32", SetLastError=true, CharSet=CharSet.Unicode)]
-            public static extern IntPtr LoadLibraryW(string p);
-          }
-          "@
-          $mods = Get-ChildItem "$pkg\lib\mlt" -Filter *.dll -ErrorAction SilentlyContinue
-          $lines = @("módulos encontrados: $($mods.Count); carpeta raíz del paquete: $((Get-ChildItem $pkg -Filter *.dll).Count) DLL")
-          foreach ($m in $mods) {
-            $h = [W]::LoadLibraryW($m.FullName)
-            if ($h -eq [IntPtr]::Zero) { $lines += "FALLA $($m.Name): error $([Runtime.InteropServices.Marshal]::GetLastWin32Error())" }
-            else { $lines += "ok $($m.Name)" }
-          }
-          $bad = $lines | Where-Object { $_ -like 'FALLA*' }
-          $head = $lines[0]
-          if ($bad) { Write-Host "::error title=Módulos de MLT que no cargan::$head%0A$($bad -join '%0A')" }
-          else { Write-Host "::notice title=Módulos de MLT::$head. Todos cargan.%0A$(($lines | Select-Object -Skip 1 | Select-Object -First 40) -join '%0A')" }
-
-      # Prueba varias formas de lanzar el melt del paquete y deja constancia de cuál funciona.
-      # La aplicación usará la primera que resulte correcta.
+      # melt es reubicable: busca lib\mlt y share\mlt junto a bin\. La aplicación lo lanzará
+      # igual, con el PATH apuntando a su carpeta bin.
       - name: Smoke test - packaged melt renders the NEXO project
         shell: pwsh
         run: |
@@ -182,23 +146,17 @@ jobs:
           $out = "$root\evidence\out_pkg.mp4"
           $sys = "$env:SystemRoot\System32;$env:SystemRoot"
           $variants = @(
-            @{ n='A: PATH=paquete, MLT_REPOSITORY con \'; path="$pkg;$sys"; repo="$pkg\lib\mlt"; data="$pkg\share\mlt"; cwd=$root },
-            @{ n='B: MLT_REPOSITORY con /';              path="$pkg;$sys"; repo=("$pkg\lib\mlt" -replace '\\','/'); data=("$pkg\share\mlt" -replace '\\','/'); cwd=$root },
-            @{ n='C: sin variables, cwd=paquete';        path="$pkg;$sys"; repo=$null; data=$null; cwd=$pkg },
-            @{ n='D: MLT_REPOSITORY con barra final';    path="$pkg;$sys"; repo="$pkg\lib\mlt\"; data="$pkg\share\mlt\"; cwd=$root },
-            @{ n='E: solo MLT_DATA';                     path="$pkg;$sys"; repo=$null; data="$pkg\share\mlt"; cwd=$pkg },
-            @{ n='F: MLT_REPOSITORY = raíz del paquete'; path="$pkg;$sys"; repo=$pkg; data="$pkg\share\mlt"; cwd=$root },
-            @{ n='G: DLL copiadas junto a los módulos';  path="$pkg;$sys"; repo="$pkg\lib\mlt"; data="$pkg\share\mlt"; cwd=$root; prep=$true }
+            @{ n='A: reubicable, sin variables'; repo=$null; data=$null },
+            @{ n='B: con MLT_REPOSITORY y MLT_DATA'; repo="$pkg\lib\mlt"; data="$pkg\share\mlt" }
           )
           $summary = @(); $winner = $null
           foreach ($v in $variants) {
             Remove-Item $out -ErrorAction SilentlyContinue
-            if ($v.prep) { Get-ChildItem $pkg -Filter *.dll | ForEach-Object { Copy-Item $_.FullName "$pkg\lib\mlt" -Force } }
-            $env:PATH = $v.path
+            $env:PATH = "$pkg\bin;$sys"
             if ($v.repo) { $env:MLT_REPOSITORY = $v.repo } else { Remove-Item Env:MLT_REPOSITORY -ErrorAction SilentlyContinue }
             if ($v.data) { $env:MLT_DATA = $v.data } else { Remove-Item Env:MLT_DATA -ErrorAction SilentlyContinue }
             $log = "$root\evidence\melt-pkg-$($v.n.Substring(0,1)).log"
-            $m = Start-Process "$pkg\melt.exe" -WorkingDirectory $v.cwd `
+            $m = Start-Process "$pkg\bin\melt.exe" -WorkingDirectory $root `
                    -ArgumentList "-verbose","`"$proj`"","-consumer","avformat:`"$out`"","vcodec=libx264","acodec=aac" `
                    -Wait -PassThru -RedirectStandardError $log -RedirectStandardOutput "$log.out" -NoNewWindow
             $ok = ($m.ExitCode -eq 0) -and (Test-Path $out)
