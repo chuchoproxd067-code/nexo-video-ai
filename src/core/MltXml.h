@@ -9,6 +9,7 @@
 //   mix       = mezcla el audio de cada pista con la base
 //   composite = superpone el video de cada pista de video con la base
 // Las pistas de audio llevan hide="video".
+#include <map>
 #include <string>
 #include <vector>
 
@@ -23,6 +24,12 @@ struct ExportSettings {
     int height = 720;
     ExportFormat format = ExportFormat::Mp4;
     int quality = 1;          // 0 = alta, 1 = media, 2 = baja (solo formatos con pérdida)
+    // Total de fotogramas de cada medio (a la tasa de la secuencia). Solo hace falta para clips
+    // invertidos: la inversa de MLT cuenta desde el final del medio.
+    std::map<std::string, Frame> mediaFrames;
+    // PNG RGBA a tamaño completo (width x height) ya dibujado para cada clip de texto (lo genera
+    // la aplicación con Qt; el núcleo no dibuja texto).
+    std::map<ClipId, std::string> textImages;
 };
 
 const char* formatExtension(ExportFormat f);     // sin punto: "mp4"
