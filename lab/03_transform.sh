@@ -36,3 +36,23 @@ note "crop ffprobe" "$(ffprobe -v error -show_entries stream=width,height -of cs
 # affine con use_normalized (0..1)
 render $E/clipA.mp4 $E/aff_norm.mp4 out=29 -filter affine transition.rect="0.25/0.25:0.5x0.5:1" use_normalized=1
 note "affine normalizado" "TL=$(yregion $E/aff_norm.mp4 10 100:60:20:20) centro=$(yregion $E/aff_norm.mp4 10 100:60:270:150)"
+
+# affine: rect centrado con escala (x,y = esquina sup-izq en píxeles de salida)
+render $E/clipA.mp4 $E/aff_scale50.mp4 out=29 -filter affine transition.rect="160/90:320x180:100"
+note "affine escala 50 centrada" "centro=$(yregion $E/aff_scale50.mp4 10 100:60:270:150) esquina=$(yregion $E/aff_scale50.mp4 10 60:40:5:5) (esquina negra=16)"
+render $E/clipA.mp4 $E/aff_fix.mp4 out=29 -filter affine transition.rect="0/0:640x360:100" transition.fix_rotate_z=20 transition.distort=0
+note "affine rotación z=20" "esquina=$(yregion $E/aff_fix.mp4 10 40:40:0:0) centro=$(yregion $E/aff_fix.mp4 10 100:60:270:150)"
+render $E/clipA.mp4 $E/aff_rotx.mp4 out=29 -filter affine transition.rect="0/0:640x360:100" transition.fix_rotate_x=20
+note "affine rotación x=20" "esquina=$(yregion $E/aff_rotx.mp4 10 40:40:0:0) centro=$(yregion $E/aff_rotx.mp4 10 100:60:270:150)"
+render $E/clipA.mp4 $E/aff_opac25.mp4 out=29 -filter affine transition.rect="0/0:640x360:25"
+note "affine opacidad 25%" "centro=$(yregion $E/aff_opac25.mp4 10 100:60:270:150) base=$(yregion $E/clipA.mp4 10 100:60:270:150) (con fondo negro debería ser ~25% de la base+16)"
+# affine con background transparente y compuesto sobre el fondo del tractor: opacity en composite? rect desplazado
+render $E/clipA.mp4 $E/aff_move.mp4 out=29 -filter affine transition.rect="100/50:640x360:100"
+note "affine desplazado (100,50)" "esquina sup-izq=$(yregion $E/aff_move.mp4 10 60:30:5:5) (negro) esquina inf-der=$(yregion $E/aff_move.mp4 10 60:30:575:325)"
+# crop: comparar con hipótesis (recorte escalado vs con barras)
+ffmpeg -hide_banner -v error -y -i $E/clipA.mp4 -vf "select=eq(n\,10),crop=320:360:160:0,scale=640:360" -frames:v 1 $E/hyp_stretch.png
+ffmpeg -hide_banner -v error -y -i $E/clipA.mp4 -vf "select=eq(n\,10),crop=320:360:160:0,scale=320:360,pad=640:360:160:0" -frames:v 1 $E/hyp_bars.png
+ffmpeg -hide_banner -v error -y -i $E/aff_scale50.mp4 -vf "select=eq(n\,10)" -frames:v 1 $E/_unused.png
+render $E/clipA.mp4 $E/crop_c.mp4 out=29 -filter crop left=160 right=160
+ffmpeg -hide_banner -v error -y -i $E/crop_c.mp4 -vf "select=eq(n\,10)" -frames:v 1 $E/crop_c10.png
+note "crop 160/160 vs hipótesis" "estirado=$(psnr $E/crop_c10.png $E/hyp_stretch.png) barras=$(psnr $E/crop_c10.png $E/hyp_bars.png)"

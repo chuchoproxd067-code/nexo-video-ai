@@ -1,10 +1,12 @@
+set +e +o pipefail
 # Utilidades comunes del laboratorio.
 note() { mkdir -p evidence; printf "%s: %s\n" "$1" "$2" >> "${RESULTS:-evidence/results.txt}"; }
 yall() { ffmpeg -hide_banner -i "$1" -vf signalstats,metadata=print:key=lavfi.signalstats.YAVG -an -f null - 2>&1 | grep -o 'YAVG=[0-9.]*' | cut -d= -f2; }
 yframe() { yall "$1" | sed -n "$(( $2 + 1 ))p"; }
-yregion() { # archivo, n_frame, w:h:x:y
-  ffmpeg -hide_banner -v error -i "$1" -vf "select=eq(n\,$2),crop=$3,signalstats,metadata=print:key=lavfi.signalstats.YAVG" -an -frames:v 1 -f null - 2>&1 | grep -o 'YAVG=[0-9.]*' | cut -d= -f2
+yregion() { # archivo, n_frame, w:h:x:y  -> YAVG de esa región en ese fotograma
+  ffmpeg -hide_banner -v error -i "$1" -vf "select=eq(n\,$2),crop=$3,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-" -an -frames:v 1 -f null - 2>/dev/null | grep -o 'YAVG=[0-9.]*' | head -1 | cut -d= -f2
 }
+psnr() { ffmpeg -hide_banner -i "$1" -i "$2" -lavfi psnr -f null - 2>&1 | grep -o 'average:[0-9.a-z]*' | cut -d: -f2; }
 nframes() { ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=nw=1:nk=1 "$1"; }
 mkclips() {
   [ -f evidence/clipA.mp4 ] && return
