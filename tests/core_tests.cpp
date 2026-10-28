@@ -469,7 +469,7 @@ static void testClipFx() {
     CHECK(contains(r.xml, "<property name=\"gain\">0.5</property>"));                         // ganancia constante
     CHECK(contains(r.xml, "<filter in=\"10\" out=\"29\">"));                                  // rampa de entrada
     CHECK(contains(r.xml, "<filter in=\"80\" out=\"109\">"));                                 // rampa de salida
-    CHECK(contains(r.xml, "<property name=\"level\">10=0;30=1;79=1;109=0</property>"));
+    CHECK(contains(r.xml, "<property name=\"alpha\">10=0;30=1;79=1;109=0</property>"));
     CHECK(contains(r.xml, "<property name=\"gain\">2</property>"));          // audio: solo volumen
     std::size_t brightness = 0;
     for (std::size_t p = 0; (p = r.xml.find(">brightness<", p)) != std::string::npos; ++p) ++brightness;
@@ -792,6 +792,88 @@ static void testClipProps() {
     }
 }
 
+static void testPropsXml() {
+    Timeline tl({30, 1});
+    const std::size_t v = tl.addTrack("V", TrackKind::Video);
+    const std::size_t a = tl.addTrack("A", TrackKind::Audio);
+    ExportSettings st; st.width = 640; st.height = 360;
+    auto xmlOf = [&](const Timeline& t) { const XmlResult r = buildMltXml(t, st); CHECK(r.ok); return r.xml; };
+
+    Clip c = makeClip(0, 60, 0, "m.mp4");
+    const Result r1 = tl.addClip(v, c);
+    CHECK(r1.ok);
+    CHECK(!contains(xmlOf(tl), "affine") && !contains(xmlOf(tl), "timewarp"));   // sin propiedades: XML limpio
+
+    ClipProps p;
+    p.speed = 2; p.scale = 50; p.posX = 10; p.rotation = 20; p.flipH = true; p.brightness = 0.2;
+    p.denoise = true; p.normalize = true; p.bass = 5; p.chroma.enabled = true; p.chroma.rgb = 0x00FF00;
+    p.effects = {{EffectKind::Blur, 0.5}, {EffectKind::Sepia, 1}};
+    CHECK(tl.setClipProps(r1.clip, p).ok);
+    std::string x = xmlOf(tl);
+    CHECK(contains(x, ">timewarp<") && contains(x, "2:m.mp4"));
+    CHECK(contains(x, "transition.rect") && contains(x, "transition.fix_rotate_z\">20<"));
+    CHECK(contains(x, "avfilter.hflip") && contains(x, "avfilter.eq") && contains(x, "avfilter.gblur"));
+    CHECK(contains(x, ">rnnoise<") && contains(x, ">dynamic_loudness<") && contains(x, "avfilter.bass"));
+    CHECK(contains(x, "#00ff00"));
+    // escala 50 % centrada con desplazamiento +10 % de 640: x = 160 + 64 = 224, y = 90
+    CHECK(contains(x, "224/90:320x180"));
+
+    // inversa: necesita la duración del medio
+    ClipProps rv; rv.reverse = true;
+    Timeline t2({30, 1});
+    const std::size_t v2 = t2.addTrack("V", TrackKind::Video);
+    Clip c2 = makeClip(0, 30, 30, "r.mp4");
+    const Result r2 = t2.addClip(v2, c2);
+    CHECK(t2.setClipProps(r2.clip, rv).ok);
+    CHECK(!buildMltXml(t2, st).ok);                       // sin mediaFrames
+    st.mediaFrames["r.mp4"] = 120;
+    x = xmlOf(t2);
+    CHECK(contains(x, "-1:r.mp4") && contains(x, "in=\"60\" out=\"89\""));   // 120 - (30+30) = 60
+
+    // congelado: hold con el fotograma
+    ClipProps fz; fz.freeze = true;
+    Timeline t3({30, 1});
+    const std::size_t v3 = t3.addTrack("V", TrackKind::Video);
+    const Result r3 = t3.addClip(v3, makeClip(0, 40, 15, "f.mp4"));
+    CHECK(t3.setClipProps(r3.clip, fz).ok);
+    x = xmlOf(t3);
+    CHECK(contains(x, ">hold<") && contains(x, "\"frame\">15<"));
+
+    // fotogramas clave: posiciones absolutas del producer
+    ClipProps kf;
+    kf.keyframes = {{0, 0, 0, 100, 0, 1}, {20, 10, 0, 50, 45, 0.5}};
+    Timeline t4({30, 1});
+    const std::size_t v4 = t4.addTrack("V", TrackKind::Video);
+    const Result r4 = t4.addClip(v4, makeClip(0, 60, 30, "k.mp4"));
+    CHECK(t4.setClipProps(r4.clip, kf).ok);
+    x = xmlOf(t4);
+    CHECK(contains(x, "30=0/0:640x360") && contains(x, ";50=") && contains(x, "fix_rotate_z\">30=0;50=45<"));
+
+    // texto sin imagen = error; con imagen = qimage
+    Timeline t5({30, 1});
+    const std::size_t v5 = t5.addTrack("V", TrackKind::Video);
+    TextProps tp; tp.text = "Hola";
+    const Result r5 = t5.addTextClip(v5, tp, 0, 30);
+    CHECK(r5.ok && !buildMltXml(t5, st).ok);
+    st.textImages[r5.clip] = "C:\\tmp\\t.png";
+    x = xmlOf(t5);
+    CHECK(contains(x, ">qimage<") && contains(x, "C:/tmp/t.png"));
+
+    // banderas de pista
+    Timeline t6({30, 1});
+    const std::size_t v6 = t6.addTrack("V", TrackKind::Video);
+    const std::size_t a6 = t6.addTrack("A", TrackKind::Audio);
+    t6.addClip(v6, makeClip(0, 30, 0, "a.mp4"));
+    t6.addClip(a6, makeClip(0, 30, 0, "a.wav"));
+    CHECK(t6.setTrackFlags(v6, true, false, false).ok);
+    CHECK(t6.setTrackFlags(a6, true, false, false).ok);
+    x = xmlOf(t6);
+    CHECK(contains(x, "pl_0\" hide=\"audio\"") && contains(x, "pl_1\" hide=\"both\""));
+    CHECK(t6.setTrackFlags(v6, false, true, false).ok);
+    CHECK(contains(xmlOf(t6), "pl_0\" hide=\"video\""));
+    (void)a;
+}
+
 int main() {
     testTimecode();
     testAddAndOverlap();
@@ -807,6 +889,7 @@ int main() {
     testClipFx();
     testTransitions();
     testClipProps();
+    testPropsXml();
     testMediaProbe();
     std::printf("%d comprobaciones, %d fallos\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;

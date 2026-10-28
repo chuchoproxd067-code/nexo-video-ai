@@ -314,7 +314,7 @@ XmlResult buildMltXml(const Timeline& tl, const ExportSettings& st) {
                 }
             }
             if ((c.fadeIn > 0 || c.fadeOut > 0) && isVideoTrack)
-                x << filter("brightness", {{"level", fadeKeyframes(c, e0, 1.0)}});
+                x << filter("brightness", {{"alpha", fadeKeyframes(c, e0, 1.0)}});
             x << "  </producer>\n";
         }
 

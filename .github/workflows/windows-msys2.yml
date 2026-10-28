@@ -169,6 +169,21 @@ jobs:
           [ "$frames" = "100" ] || { echo "::error title=Fundido cruzado::duración incorrecta: $msg"; exit 1; }
           awk -v a="$ya" -v m="$ymid" -v b="$yb" -v am="$amid" 'BEGIN{ d=(a>b)?a-b:b-a; lo=(a<b)?a:b; hi=(a<b)?b:a; ok=(d>20 && m>lo+d*0.15 && m<hi-d*0.15 && am>-40); exit ok?0:1 }' || { echo "::error title=Fundido cruzado::la zona de mezcla no está entre A y B: $msg"; exit 1; }
 
+      # Cada propiedad de clip (velocidad, inversa, congelar, transformación, color, efectos, croma, audio,
+      # texto, banderas de pista) se renderiza con melt real y se MIDE. No bloquea el build: el resultado
+      # (OK/FALLA por propiedad) es la evidencia que decide el estado en STATUS.md.
+      - name: Verify clip properties with real renders
+        continue-on-error: true
+        shell: msys2 {0}
+        run: |
+          bash tools/ci_props_check.sh build/tests/props_case_tool evidence | tee evidence/props_log.txt
+          i=0
+          fold -w 2800 evidence/props_results.txt > evidence/props_chunks.txt
+          buf=""; n=0
+          while IFS= read -r line || [ -n "$line" ]; do buf="$buf$line%0A"; n=$((n+1)); if [ $n -ge 14 ]; then i=$((i+1)); [ $i -le 9 ] && echo "::notice title=Propiedades de clip $i::$buf"; buf=""; n=0; fi; done < evidence/props_results.txt
+          if [ -n "$buf" ]; then i=$((i+1)); [ $i -le 9 ] && echo "::notice title=Propiedades de clip $i::$buf"; fi
+          grep -q '^FALLA' evidence/props_results.txt && echo "::warning title=Propiedades de clip::hay propiedades que no pasan, ver anotaciones" || true
+
       - name: Capture melt progress output format
         continue-on-error: true
         shell: msys2 {0}
