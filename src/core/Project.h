@@ -14,7 +14,7 @@
 
 namespace nexo {
 
-constexpr int kProjectSchemaVersion = 1;
+constexpr int kProjectSchemaVersion = 2;   // 2: propiedades de clip, textos, banderas de pista y marcadores (los proyectos de esquema 1 se abren igual)
 
 struct Project {
     std::string name = "Sin título";

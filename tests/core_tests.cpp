@@ -1,5 +1,6 @@
 // Pruebas unitarias del núcleo. Sin dependencias externas: cada CHECK que falla
 // se imprime y el programa termina con código distinto de 0.
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -244,9 +245,9 @@ static void testProjectRejectsBadFiles() {
     CHECK(!fromJson("{}", out, err));
     CHECK(!fromJson("no es json", out, err));
     // Esquema futuro: se rechaza con un mensaje que lo explica
-    CHECK(!fromJson(replaceOnce("\"schema\": 1", "\"schema\": 99"), out, err));
+    CHECK(!fromJson(replaceOnce("\"schema\": 2", "\"schema\": 99"), out, err));
     CHECK(err.find("más nueva") != std::string::npos);
-    CHECK(!fromJson(replaceOnce("\"schema\": 1", "\"schema\": 0"), out, err));
+    CHECK(!fromJson(replaceOnce("\"schema\": 2", "\"schema\": 0"), out, err));
     // Valores inválidos
     CHECK(!fromJson(replaceOnce("\"num\": 25", "\"num\": 0"), out, err));
     CHECK(!fromJson(replaceOnce("\"duration\": 100", "\"duration\": -5"), out, err));
@@ -570,6 +571,227 @@ static void testTransitions() {
     CHECK(!fromJson(bad, q3, err));
 }
 
+static void testClipProps() {
+    // --- validación ---
+    ClipProps d;
+    CHECK(validateProps(d, 100).empty() && d.isDefault() && !d.hasTransform());
+    ClipProps bad = d; bad.speed = 0.01; CHECK(!validateProps(bad, 100).empty());
+    bad = d; bad.speed = 17; CHECK(!validateProps(bad, 100).empty());
+    bad = d; bad.opacity = 1.5; CHECK(!validateProps(bad, 100).empty());
+    bad = d; bad.scale = 0; CHECK(!validateProps(bad, 100).empty());
+    bad = d; bad.cropLeft = 60; bad.cropRight = 40; CHECK(!validateProps(bad, 100).empty());
+    bad = d; bad.contrast = std::nan(""); CHECK(!validateProps(bad, 100).empty());
+    bad = d; bad.pitch = 3; bad.speed = 2; CHECK(!validateProps(bad, 100).empty());     // tono solo a velocidad normal
+    bad = d; bad.keyframes = {{10, 0, 0, 100, 0, 1}, {10, 0, 0, 100, 0, 1}}; CHECK(!validateProps(bad, 100).empty());   // no estrictos
+    bad = d; bad.keyframes = {{100, 0, 0, 100, 0, 1}}; CHECK(!validateProps(bad, 100).empty());                      // fuera del clip
+    bad = d; bad.effects.assign(9, Effect{}); CHECK(!validateProps(bad, 100).empty());
+    CHECK(sourceSpan(d, 90) == 90);
+    ClipProps fast = d; fast.speed = 2;
+    CHECK(sourceSpan(fast, 60) == 120 && durationForSpan(fast, 120) == 60);
+    ClipProps fr = d; fr.freeze = true;
+    CHECK(sourceSpan(fr, 60) == 1);
+    for (EffectKind k : {EffectKind::Blur, EffectKind::Sharpen, EffectKind::Vignette, EffectKind::Mosaic,
+                         EffectKind::Grayscale, EffectKind::Sepia, EffectKind::Invert, EffectKind::Mirror}) {
+        EffectKind back = EffectKind::Blur;
+        CHECK(effectFromName(effectName(k), back) && back == k);
+    }
+
+    // --- velocidad: el clip conserva su tramo del medio y cambia de duración ---
+    Timeline tl({30, 1});
+    const auto v = tl.addTrack("V1", TrackKind::Video);
+    const ClipId c1 = tl.addClip(v, makeClip(0, 120, 30, "m.mp4")).clip;     // 120 fotogramas del medio desde el 30
+    const ClipId c2 = tl.addClip(v, makeClip(300, 50, 0, "n.mp4")).clip;
+    (void)c2;
+    ClipProps p2 = d; p2.speed = 2;
+    CHECK(tl.setClipProps(c1, p2).ok);
+    CHECK(tl.track(v).clips[0].duration == 60 && tl.track(v).clips[0].sourceIn == 30);
+    ClipProps p05 = d; p05.speed = 0.5;
+    CHECK(tl.setClipProps(c1, p05).ok);                                      // 120 fotogramas a 0,5x -> 240
+    CHECK(tl.track(v).clips[0].duration == 240);
+    CHECK(tl.validate().empty());
+    {   // más lento choca con el clip siguiente: error y sin cambios
+        Timeline t2 = tl;
+        ClipProps slow = d; slow.speed = 0.1;
+        const Result r = t2.setClipProps(c1, slow);
+        CHECK(!r.ok);
+        CHECK(t2.track(v).clips[0].props.speed == tl.track(v).clips[0].props.speed);
+    }
+    // Recorte con velocidad 2x: avanzar 10 fotogramas de secuencia consume 20 del medio.
+    {
+        Timeline t2({30, 1});
+        const auto vv = t2.addTrack("V1", TrackKind::Video);
+        const ClipId id = t2.addClip(vv, makeClip(0, 60, 0, "m.mp4")).clip;
+        ClipProps f2 = d; f2.speed = 2;
+        t2.setClipProps(id, f2);                                             // ahora dura 30 (60 del medio)
+        CHECK(t2.track(vv).clips[0].duration == 30);
+        CHECK(t2.trimStart(id, 10).ok);
+        CHECK(t2.track(vv).clips[0].sourceIn == 20 && t2.track(vv).clips[0].duration == 20 && t2.track(vv).clips[0].timelineStart == 10);
+        CHECK(t2.splitClip(id, 20).ok);                                      // izquierda 10 fotogramas -> 20 del medio
+        CHECK(t2.track(vv).clips[1].sourceIn == 40 && t2.track(vv).clips[1].duration == 10);
+        CHECK(t2.validate().empty());
+    }
+    // Inversa: el inicio de la secuencia es el final del tramo del medio.
+    {
+        Timeline t2({30, 1});
+        const auto vv = t2.addTrack("V1", TrackKind::Video);
+        const ClipId id = t2.addClip(vv, makeClip(0, 60, 100, "m.mp4")).clip;   // medio [100,160)
+        ClipProps rv = d; rv.reverse = true;
+        CHECK(t2.setClipProps(id, rv).ok && t2.track(vv).clips[0].duration == 60);
+        CHECK(t2.trimStart(id, 10).ok);
+        CHECK(t2.track(vv).clips[0].sourceIn == 100 && t2.track(vv).clips[0].duration == 50);   // medio [100,150)
+        CHECK(t2.splitClip(id, 30).ok);                                          // izquierda 20 fotogramas
+        CHECK(t2.track(vv).clips[0].sourceIn == 130 && t2.track(vv).clips[1].sourceIn == 100);    // izq [130,150), der [100,130)
+        CHECK(t2.trimEnd(t2.track(vv).clips[1].id, 20).ok);
+        CHECK(t2.track(vv).clips[1].sourceIn == 80 && t2.track(vv).clips[1].duration == 50);
+        CHECK(!t2.trimEnd(t2.track(vv).clips[1].id, 100).ok);                      // no hay medio anterior
+        CHECK(t2.validate().empty());
+    }
+
+    // --- fotogramas clave: siguen a la imagen al dividir y recortar ---
+    {
+        Timeline t2({30, 1});
+        const auto vv = t2.addTrack("V1", TrackKind::Video);
+        const ClipId id = t2.addClip(vv, makeClip(0, 100, 0, "m.mp4")).clip;
+        ClipProps kp = d;
+        kp.keyframes = {{0, 0, 0, 100, 0, 1}, {40, 10, 0, 150, 0, 1}, {90, 0, 0, 100, 0, 0.5}};
+        CHECK(t2.setClipProps(id, kp).ok);
+        CHECK(t2.splitClip(id, 50).ok);
+        CHECK(t2.track(vv).clips[0].props.keyframes.size() == 2 && t2.track(vv).clips[1].props.keyframes.size() == 1);
+        CHECK(t2.track(vv).clips[1].props.keyframes[0].frame == 40);              // 90 - 50
+        CHECK(t2.validate().empty());
+        CHECK(t2.trimStart(t2.track(vv).clips[0].id, 10).ok);
+        CHECK(t2.track(vv).clips[0].props.keyframes.size() == 1 && t2.track(vv).clips[0].props.keyframes[0].frame == 30);
+        CHECK(t2.validate().empty());
+    }
+
+    // --- texto ---
+    {
+        Timeline t2({30, 1});
+        const auto vv = t2.addTrack("V1", TrackKind::Video);
+        const auto aa = t2.addTrack("A1", TrackKind::Audio);
+        TextProps tp; tp.text = "Hola";
+        const Result r = t2.addTextClip(vv, tp, 10, 60);
+        CHECK(r.ok && t2.track(vv).clips[0].kind == ClipKind::Text && t2.duration() == 70);
+        CHECK(!t2.addTextClip(aa, tp, 0, 30).ok);                                  // no en pistas de audio
+        TextProps empty; CHECK(!t2.addTextClip(vv, empty, 100, 30).ok);
+        TextProps big = tp; big.size = 80; CHECK(!t2.addTextClip(vv, big, 100, 30).ok);
+        tp.text = "Adiós"; CHECK(t2.setText(r.clip, tp).ok && t2.track(vv).clips[0].text.text == "Adiós");
+        ClipProps sp = d; sp.speed = 2;
+        CHECK(!t2.setClipProps(r.clip, sp).ok);                                    // un texto no tiene velocidad
+        CHECK(t2.splitClip(r.clip, 40).ok && t2.track(vv).clips[1].kind == ClipKind::Text);
+        CHECK(t2.validate().empty());
+    }
+
+    // --- audio separado ---
+    {
+        Timeline t2({30, 1});
+        const auto vv = t2.addTrack("V1", TrackKind::Video);
+        const auto aa = t2.addTrack("A1", TrackKind::Audio);
+        const ClipId id = t2.addClip(vv, makeClip(5, 60, 10, "m.mp4")).clip;
+        CHECK(!t2.detachAudio(id, vv).ok);                                         // destino debe ser audio
+        const Result r = t2.detachAudio(id, aa);
+        CHECK(r.ok && t2.track(aa).clips.size() == 1);
+        const Clip& ac = t2.track(aa).clips[0];
+        CHECK(ac.mediaPath == "m.mp4" && ac.sourceIn == 10 && ac.timelineStart == 5 && ac.duration == 60);
+        CHECK(t2.track(vv).clips[0].props.muted);
+        CHECK(!t2.detachAudio(id, aa).ok);                                         // ya separado
+        CHECK(t2.validate().empty());
+    }
+
+    // --- ripple, pistas y marcadores ---
+    {
+        Timeline t2({30, 1});
+        const auto vv = t2.addTrack("V1", TrackKind::Video);
+        t2.addClip(vv, makeClip(0, 30, 0, "a.mp4"));
+        const ClipId b = t2.addClip(vv, makeClip(30, 30, 0, "b.mp4")).clip;
+        t2.addClip(vv, makeClip(60, 30, 0, "c.mp4"));
+        CHECK(t2.removeClipRipple(b).ok);
+        CHECK(t2.track(vv).clips.size() == 2 && t2.track(vv).clips[1].timelineStart == 30 && t2.duration() == 60);
+        CHECK(t2.validate().empty());
+        // con transición: el siguiente se queda pegado al anterior
+        Timeline t3({30, 1});
+        const auto v3 = t3.addTrack("V1", TrackKind::Video);
+        const ClipId x = t3.addClip(v3, makeClip(0, 60, 0, "a.mp4")).clip;
+        const ClipId y = t3.addClip(v3, makeClip(60, 60, 0, "b.mp4")).clip;
+        const ClipId z = t3.addClip(v3, makeClip(120, 60, 0, "c.mp4")).clip;
+        CHECK(t3.setTransition(y, 20).ok && t3.setTransition(z, 10).ok);
+        (void)x;
+        CHECK(t3.removeClipRipple(y).ok);
+        CHECK(t3.track(v3).clips.size() == 2 && t3.track(v3).clips[1].transitionIn == 0 && t3.track(v3).clips[1].timelineStart == 60);
+        CHECK(t3.validate().empty());
+
+        // pistas
+        CHECK(!t2.removeTrack(vv).ok);                                             // no vacía
+        const auto extra = t2.addTrack("V2", TrackKind::Video);
+        CHECK(t2.setTrackFlags(extra, true, true, false).ok && t2.track(extra).muted && t2.track(extra).hidden);
+        CHECK(t2.renameTrack(extra, "Títulos").ok && t2.track(extra).name == "Títulos");
+        CHECK(!t2.renameTrack(extra, "").ok);
+        CHECK(t2.removeTrack(extra).ok && t2.trackCount() == 1);
+        // bloqueo: ninguna operación modifica la pista
+        const ClipId first = t2.track(vv).clips[0].id;
+        t2.setTrackFlags(vv, false, false, true);
+        CHECK(!t2.moveClip(first, vv, 500).ok && !t2.trimEnd(first, -5).ok && !t2.trimStart(first, 5).ok);
+        CHECK(!t2.splitClip(first, 10).ok && !t2.removeClip(first).ok && !t2.removeClipRipple(first).ok);
+        CHECK(!t2.setClipProps(first, d).ok && !t2.setClipFx(first, 1.0, 0, 0).ok && !t2.addClip(vv, makeClip(500, 10)).ok);
+        t2.setTrackFlags(vv, false, false, false);
+        CHECK(t2.splitClip(first, 10).ok);
+        // marcadores
+        CHECK(t2.addMarker(90, "fin").ok && t2.addMarker(10, "inicio").ok && t2.addMarker(10, "otra").ok);
+        CHECK(t2.markers().size() == 2 && t2.markers()[0].frame == 10 && t2.markers()[0].name == "otra");
+        CHECK(!t2.addMarker(-1, "x").ok && !t2.removeMarker(5).ok && t2.removeMarker(0).ok && t2.markers().size() == 1);
+    }
+
+    // --- guardado: todo ida y vuelta, y un proyecto de esquema 1 sigue abriendo ---
+    {
+        Timeline t2({25, 1});
+        const auto vv = t2.addTrack("V1", TrackKind::Video);
+        const auto aa = t2.addTrack("A1", TrackKind::Audio);
+        const ClipId id = t2.addClip(vv, makeClip(0, 100, 5, "m.mp4")).clip;
+        ClipProps full = d;
+        full.speed = 1.5; full.reverse = true; full.posX = 10; full.posY = -20; full.scale = 80; full.rotation = 15; full.opacity = 0.7;
+        full.cropLeft = 5; full.cropTop = 2.5; full.flipH = true; full.brightness = 0.1; full.contrast = 1.2; full.saturation = 0.8;
+        full.temperature = 5500; full.effects = {{EffectKind::Blur, 0.3}, {EffectKind::Sepia, 1.0}};
+        full.chroma = {true, 0x00FF00, 0.4, 0.2};
+        full.keyframes = {{0, 0, 0, 100, 0, 1}, {30, 5, 5, 120, 10, 0.9}};
+        full.stabilize = true; full.muted = true; full.denoise = true; full.normalize = true; full.bass = 3; full.treble = -2;
+        CHECK(t2.setClipProps(id, full).ok);
+        TextProps tp; tp.text = "Título \"con comillas\""; tp.bold = true; tp.color = 0xFFCC00; tp.size = 12;
+        CHECK(t2.addTextClip(vv, tp, 200, 40).ok);
+        t2.addClip(aa, makeClip(0, 50, 0, "s.wav"));
+        t2.setTrackFlags(aa, true, false, true);
+        t2.addMarker(33, "mitad");
+        Project p; p.timeline = t2;
+        const std::string text = toJson(p);
+        Project q; std::string err;
+        CHECK(fromJson(text, q, err));
+        CHECK(q.timeline.track(vv).clips[0].props == t2.track(vv).clips[0].props);
+        CHECK(q.timeline.track(vv).clips[1].kind == ClipKind::Text && q.timeline.track(vv).clips[1].text == tp);
+        CHECK(q.timeline.track(aa).muted && q.timeline.track(aa).locked && !q.timeline.track(aa).hidden);
+        CHECK(q.timeline.markers().size() == 1 && q.timeline.markers()[0].name == "mitad");
+        CHECK(toJson(q) == text);
+        CHECK(p.missingMedia().size() == 2);                                       // m.mp4 y s.wav; el texto no cuenta
+        std::string old = text;                                                    // un archivo de esquema 1 sin los campos nuevos
+        const std::size_t sp = old.find("\"schema\": 2");
+        CHECK(sp != std::string::npos);
+        old.replace(sp, std::string("\"schema\": 2").size(), "\"schema\": 1");
+        Project q1;
+        CHECK(fromJson(old, q1, err));
+        // datos corruptos
+        std::string corrupt = text;
+        const std::size_t pp = corrupt.find("\"speed\": 1.5");
+        CHECK(pp != std::string::npos);
+        corrupt.replace(pp, std::string("\"speed\": 1.5").size(), "\"speed\": 50");
+        Project q2;
+        CHECK(!fromJson(corrupt, q2, err));
+        std::string badKind = text;
+        const std::size_t kp = badKind.find("\"effects\"");
+        CHECK(kp != std::string::npos);
+        const std::size_t bp = badKind.find("\"blur\"", kp);
+        badKind.replace(bp, 6, "\"nope\"");
+        CHECK(!fromJson(badKind, q2, err));
+    }
+}
+
 int main() {
     testTimecode();
     testAddAndOverlap();
@@ -584,6 +806,7 @@ int main() {
     testMltXml();
     testClipFx();
     testTransitions();
+    testClipProps();
     testMediaProbe();
     std::printf("%d comprobaciones, %d fallos\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;

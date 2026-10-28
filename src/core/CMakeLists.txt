@@ -5,6 +5,7 @@ add_library(nexo_core STATIC
   Json.cpp
   Project.cpp
   MltXml.cpp
+  ClipProps.cpp
   MediaProbe.cpp
 )
 target_include_directories(nexo_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)

@@ -195,6 +195,7 @@ jobs:
           exit $rc
 
       # Qué servicios (filtros, productores, transiciones) trae realmente el MLT de MSYS2 y con qué propiedades.
+      # GitHub admite pocas anotaciones por paso: se agrupa todo en pocos avisos grandes.
       - name: List melt services
         if: always()
         continue-on-error: true
@@ -202,19 +203,41 @@ jobs:
         run: |
           note() { # titulo archivo
             i=0
-            fold -w 3500 "$2" | while IFS= read -r chunk; do i=$((i+1)); echo "::notice title=$1 $i::$chunk"; done
+            fold -w 30000 "$2" > evidence/note_chunks.txt
+            while IFS= read -r chunk || [ -n "$chunk" ]; do i=$((i+1)); [ $i -le 9 ] && echo "::notice title=$1 $i::$chunk"; done < evidence/note_chunks.txt
           }
-          melt -query filters 2>/dev/null | grep -E '^ *- ' | sed 's/^ *- //' | grep -v '^avfilter\.' | sort | tr '\n' ' ' > evidence/filters_core.txt
-          melt -query filters 2>/dev/null | grep -E '^ *- avfilter\.' | sed 's/^ *- avfilter\.//' | sort | tr '\n' ' ' > evidence/filters_av.txt
-          note "filtros MLT" evidence/filters_core.txt
-          note "filtros avfilter" evidence/filters_av.txt
-          find /ucrt64/share/mlt -maxdepth 2 -type d | tr '\n' ' ' > evidence/dirs.txt; note "carpetas share/mlt" evidence/dirs.txt
-          find /ucrt64/share/mlt -iname '*.pgm' -o -iname '*.png' | head -80 | tr '\n' ' ' > evidence/lumas.txt; note "lumas" evidence/lumas.txt
-          for q in "filter=affine" "filter=dynamictext" "filter=brightness" "filter=volume" "filter=vidstab" "filter=crop" "filter=freeze" "filter=lift_gamma_gain" "filter=rbpitch" "filter=pitch" "filter=charcoal" "filter=mirror" "filter=box_blur" "filter=qtcrop" "filter=sepia" "filter=greyscale" "filter=invert" "filter=mosaic" "filter=chroma" "filter=chroma_hold" "filter=subtitle" "filter=loudness" "filter=normalizer" "transition=qtblend" "transition=affine" "transition=luma" "producer=qtext" "producer=timewarp" "producer=hold" "producer=color" "transition=frei0r.sleid0r_slide-left"; do
-            melt -query "$q" 2>/dev/null | grep -E 'identifier|^ *- (type|default|minimum|maximum|title)|^ *type:|^ *default:|^ *minimum:|^ *maximum:' | sed 's/^ *//' | tr '\n' ' ' > evidence/q.txt
-            note "$q" evidence/q.txt
+          { echo "### filtros MLT:"; melt -query filters 2>/dev/null | grep -E '^ *- ' | sed 's/^ *- //' | grep -v '^avfilter\.' | sort | tr '\n' ' ';
+            echo; echo "### filtros avfilter:"; melt -query filters 2>/dev/null | grep -E '^ *- avfilter\.' | sed 's/^ *- avfilter\.//' | sort | tr '\n' ' '; echo;
+            echo "### carpetas:"; find /ucrt64/share/mlt -maxdepth 2 -type d | tr '\n' ' '; echo;
+            echo "### lumas:"; find /ucrt64/share/mlt -iname '*.pgm' -o -iname '*.svg' | head -120 | tr '\n' ' '; echo; } > evidence/diag_a.txt
+          note "servicios melt A" evidence/diag_a.txt
+          : > evidence/diag_b.txt
+          for q in "filter=affine" "filter=dynamictext" "filter=brightness" "filter=volume" "filter=vidstab" "filter=crop" "filter=freeze" "filter=lift_gamma_gain" "filter=rbpitch" "filter=mirror" "filter=box_blur" "filter=sepia" "filter=greyscale" "filter=invert" "filter=mosaic" "filter=chroma" "filter=avfilter.eq" "filter=avfilter.gblur" "filter=avfilter.unsharp" "filter=avfilter.vignette" "filter=avfilter.pixelize" "filter=avfilter.negate" "filter=avfilter.hflip" "filter=avfilter.vflip" "filter=avfilter.colortemperature" "filter=avfilter.chromakey" "filter=avfilter.deshake" "filter=avfilter.afftdn" "filter=avfilter.dynaudnorm" "filter=avfilter.bass" "filter=avfilter.treble" "filter=avfilter.rubberband" "filter=avfilter.colorchannelmixer" "filter=avfilter.hue" "transition=qtblend" "transition=affine" "transition=luma" "transition=frei0r.sleid0r_slide-left" "transition=frei0r.sleid0r_wipe-circle" "producer=qtext" "producer=timewarp" "producer=hold" "producer=pango" "producer=kdenlivetitle"; do
+            { echo "### $q:"; melt -query "$q" 2>&1 | grep -E 'identifier|^ *- (type|default|minimum|maximum)|^ *type:|^ *default:|^ *minimum:|^ *maximum:|not found|error' | sed 's/^ *//' | tr '\n' ' '; echo; } >> evidence/diag_b.txt
           done
-          fc-list 2>/dev/null | head -5 | tr '\n' '|' > evidence/fonts.txt; ls /ucrt64/share/fonts /c/Windows/Fonts 2>/dev/null | head -20 | tr '\n' ' ' >> evidence/fonts.txt; note "fuentes" evidence/fonts.txt
+          note "propiedades melt B" evidence/diag_b.txt
+          { fc-list 2>/dev/null | head -5 | tr '\n' '|'; ls /ucrt64/share/fonts /c/Windows/Fonts 2>/dev/null | head -30 | tr '\n' ' '; } > evidence/fonts.txt; note "fuentes" evidence/fonts.txt
+
+      # Experimentos: sintaxis reales de velocidad, inversa, congelado y texto con melt.
+      - name: Experiments with melt (speed, reverse, freeze, text)
+        if: always()
+        continue-on-error: true
+        shell: msys2 {0}
+        run: |
+          cd evidence
+          nf() { ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=nw=1:nk=1 "$1" 2>/dev/null; }
+          dur() { ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "$1" 2>/dev/null; }
+          yavg() { ffmpeg -hide_banner -i "$1" -vf "select=eq(n\,$2),signalstats,metadata=print:key=lavfi.signalstats.YAVG" -an -f null - 2>&1 | grep -o 'YAVG=[0-9.]*' | head -1; }
+          r() { n="$1"; shift; melt "$@" -consumer avformat:x_$n.mp4 vcodec=libx264 acodec=aac > x_$n.log 2>&1 || true; }
+          out=""
+          r tw2 timewarp:2:clipA.mp4;               out="$out | timewarp 2x: frames=$(nf x_tw2.mp4) dur=$(dur x_tw2.mp4)"
+          r tw05 timewarp:0.5:clipA.mp4;            out="$out | timewarp 0.5x: frames=$(nf x_tw05.mp4) dur=$(dur x_tw05.mp4)"
+          r twrev timewarp:-1:clipA.mp4;            out="$out | timewarp -1: frames=$(nf x_twrev.mp4) dur=$(dur x_twrev.mp4) yavg0=$(yavg x_twrev.mp4 0) yavgLast=$(yavg x_twrev.mp4 119); orig yavg0=$(yavg clipA.mp4 0) yavg119=$(yavg clipA.mp4 119)"
+          r twrev2 timewarp:-2:clipA.mp4;           out="$out | timewarp -2: frames=$(nf x_twrev2.mp4)"
+          r hold -producer hold:clipA.mp4 frame=60 out=29; out="$out | hold frame=60 out=29: frames=$(nf x_hold.mp4) y=$(yavg x_hold.mp4 5); orig60=$(yavg clipA.mp4 60)"
+          r qtext -producer "qtext:" text="Hola mundo" family=Arial size=48 fgcolour=0xffffffff bgcolour=0x000000ff out=29; out="$out | qtext: frames=$(nf x_qtext.mp4) y=$(yavg x_qtext.mp4 5) log=$(tail -c 200 x_qtext.log | tr '\n' ' ')"
+          r pango -producer pango text="Hola mundo" family=Arial size=48 fgcolour=0xffffffff bgcolour=0x000000ff out=29; out="$out | pango: frames=$(nf x_pango.mp4) y=$(yavg x_pango.mp4 5) log=$(tail -c 200 x_pango.log | tr '\n' ' ')"
+          echo "::notice title=Experimentos melt::$out"
 
       - name: Render NEXO timeline with melt (MSYS2 install)
         shell: msys2 {0}

@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/ClipProps.h"
 #include "core/Timecode.h"
 
 namespace nexo {
@@ -20,6 +21,26 @@ namespace nexo {
 using ClipId = std::uint32_t;
 
 enum class TrackKind { Video, Audio };
+enum class ClipKind { Media, Text };
+
+// Texto/título superpuesto (clip de tipo Text; no usa archivo).
+struct TextProps {
+    std::string text;
+    std::string font = "Arial";
+    double size = 8;                 // altura del texto en % de la altura del cuadro (1..50)
+    std::uint32_t color = 0xFFFFFF;  // 0xRRGGBB
+    double posX = 50, posY = 85;     // centro del texto en % del cuadro (0..100)
+    bool bold = false;
+    bool operator==(const TextProps& o) const {
+        return text == o.text && font == o.font && size == o.size && color == o.color && posX == o.posX &&
+               posY == o.posY && bold == o.bold;
+    }
+};
+
+struct Marker {
+    Frame frame = 0;
+    std::string name;
+};
 
 struct Clip {
     ClipId id = 0;               // lo asigna Timeline::addClip
@@ -33,6 +54,9 @@ struct Clip {
     // Fundido cruzado con el clip anterior de la pista: los dos clips se solapan exactamente estos
     // fotogramas (timelineStart = fin del anterior - transitionIn). No necesita material extra.
     Frame transitionIn = 0;
+    ClipKind kind = ClipKind::Media;
+    TextProps text;              // solo si kind == Text
+    ClipProps props;             // velocidad, transformación, color, efectos, croma, audio
     Frame timelineEnd() const { return timelineStart + duration; }
 };
 
@@ -40,6 +64,9 @@ struct Track {
     std::string name;
     TrackKind kind = TrackKind::Video;
     std::vector<Clip> clips;     // ordenados por timelineStart
+    bool muted = false;          // pista de audio silenciada (o audio de una pista de video)
+    bool hidden = false;         // pista de video oculta
+    bool locked = false;         // no admite cambios en sus clips
 };
 
 // Resultado de una operación: ok o mensaje de error explícito.
@@ -81,6 +108,23 @@ public:
     // Pone (frames>0) o quita (0) el fundido cruzado con el clip anterior. Los clips deben estar
     // pegados; este y los siguientes de la pista se desplazan para conservar la continuidad.
     Result setTransition(ClipId id, Frame frames);
+    // Reemplaza las propiedades del clip. Si cambian velocidad/inversa/congelado, la duración se
+    // recalcula para conservar el mismo tramo del medio (error si chocaría con otro clip).
+    Result setClipProps(ClipId id, const ClipProps& props);
+    Result addTextClip(std::size_t track, const TextProps& text, Frame start, Frame duration);
+    Result setText(ClipId id, const TextProps& text);
+    // Elimina el clip y desplaza hacia atrás los siguientes de la misma pista.
+    Result removeClipRipple(ClipId id);
+    // Crea en `audioTrack` un clip con el audio del clip de video y silencia el original.
+    Result detachAudio(ClipId id, std::size_t audioTrack);
+    // Pistas: añadir/quitar (solo vacías) y banderas.
+    Result removeTrack(std::size_t track);
+    Result setTrackFlags(std::size_t track, bool muted, bool hidden, bool locked);
+    Result renameTrack(std::size_t track, std::string name);
+    // Marcadores (ordenados por fotograma).
+    Result addMarker(Frame frame, std::string name);
+    Result removeMarker(std::size_t index);
+    const std::vector<Marker>& markers() const { return markers_; }
     Result setClipFx(ClipId id, double volume, Frame fadeIn, Frame fadeOut);
 
     // Comprueba invariantes (sin solapes, duraciones > 0, ids únicos).
@@ -97,6 +141,8 @@ private:
     FrameRate fps_;
     std::vector<Track> tracks_;
     ClipId nextId_ = 1;
+    std::vector<Marker> markers_;
+    bool trackLocked(ClipId id) const;
 };
 
 }  // namespace nexo
