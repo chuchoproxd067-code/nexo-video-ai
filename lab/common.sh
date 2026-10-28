@@ -1,5 +1,5 @@
 # Utilidades comunes del laboratorio.
-note() { mkdir -p evidence; printf "%s: %s\n" "$1" "$2" >> evidence/results.txt; }
+note() { mkdir -p evidence; printf "%s: %s\n" "$1" "$2" >> "${RESULTS:-evidence/results.txt}"; }
 yall() { ffmpeg -hide_banner -i "$1" -vf signalstats,metadata=print:key=lavfi.signalstats.YAVG -an -f null - 2>&1 | grep -o 'YAVG=[0-9.]*' | cut -d= -f2; }
 yframe() { yall "$1" | sed -n "$(( $2 + 1 ))p"; }
 yregion() { # archivo, n_frame, w:h:x:y

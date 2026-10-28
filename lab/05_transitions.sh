@@ -1,18 +1,10 @@
 source lab/common.sh
 mkclips
 E=evidence
-# ---- listados completos (los anteriores se truncaron) ----
-L="$(dirname "$(which melt)")/../share/mlt/lumas"
-ls -R "$L" > $E/lumas.txt 2>&1; note "lumas (directorios)" "$(ls "$L" | tr '\n' ' ')"
-note "lumas PAL" "$(ls "$L"/PAL 2>/dev/null | head -60 | tr '\n' ' ')"
-note "lumas square" "$(ls "$L"/square 2>/dev/null | head -60 | tr '\n' ' ')"
-melt -query filters 2>/dev/null | sed 's/^ *- *//' > $E/filters_all.txt
-note "filtros video avfilter" "$(grep -E '^avfilter\.' $E/filters_all.txt | grep -v -E '^avfilter\.a' | tr '\n' ' ' | cut -c1-3600)"
-note "filtros no avfilter" "$(grep -v -E '^avfilter\.' $E/filters_all.txt | tr '\n' ' ' | cut -c1-3600)"
-melt -query producer=qtext 2>&1 | grep -E 'identifier' | sed 's/^ *//' | tr '\n' ' ' > $E/q_qtext.txt; note "qtext props" "$(cut -c1-1500 $E/q_qtext.txt)"
-melt -query producer=kdenlivetitle 2>&1 | grep -E 'identifier' | sed 's/^ *//' | tr '\n' ' ' > $E/q_kt.txt; note "kdenlivetitle props" "$(cut -c1-800 $E/q_kt.txt)"
-melt -query filter=dynamictext 2>&1 | grep -E 'identifier' | sed 's/^ *//' | tr '\n' ' ' > $E/q_dt.txt; note "dynamictext props" "$(cut -c1-1200 $E/q_dt.txt)"
 
+root="$(dirname "$(which melt)")/.."
+note "pgm en la instalación" "$(find "$root" -iname '*.pgm' 2>/dev/null | head -20 | tr '\n' ' ') | total=$(find "$root" -iname '*.pgm' 2>/dev/null | wc -l)"
+note "carpetas share/mlt" "$(ls "$root/share/mlt" | tr '\n' ' ')"
 # ---- transiciones luma con patrón y frei0r sleid0r ----
 mk_trans_xml() { # salida servicio_y_props...
   local out="$1"; shift
@@ -40,10 +32,18 @@ trans() { # nombre props
 }
 note "referencia A/B" "A izq=$(yregion $E/clipA.mp4 10 160:300:10:30) A der=$(yregion $E/clipA.mp4 10 160:300:470:30) B izq=$(yregion $E/clipB.mp4 10 160:300:10:30) B der=$(yregion $E/clipB.mp4 10 160:300:470:30)"
 trans dissolve '<property name="mlt_service">luma</property>'
-for lm in luma01 luma05 luma11 luma18 luma23; do
-  trans "luma_$lm" '<property name="mlt_service">luma</property><property name="resource">%luma'"${lm#luma}"'.pgm</property><property name="softness">0.2</property>'
+# patrones PGM propios (gris 8 bits): rampa horizontal/vertical, radial, diagonal
+mkpgm() { ffmpeg -hide_banner -v error -y -f lavfi -i "nullsrc=s=640x360,geq=lum='$2':cb=128:cr=128,format=gray" -frames:v 1 "$E/$1.pgm"; }
+mkpgm ramp_h "X/W*255"
+mkpgm ramp_v "Y/H*255"
+mkpgm radial "min(255,hypot(X-W/2,Y-H/2)/hypot(W/2,H/2)*255)"
+mkpgm diag "(X/W+Y/H)/2*255"
+mkpgm bars "mod(floor(X/40),2)*128+X/W*127"
+note "pgm propios" "$(ls -l $E/*.pgm | awk '{print $5, $9}' | tr '\n' ' ') cabecera: $(head -c 15 $E/ramp_h.pgm | tr '\n' ' ')"
+for lm in ramp_h ramp_v radial diag bars; do
+  trans "luma_$lm" '<property name="mlt_service">luma</property><property name="resource">'"$(pwd -W)/$E/$lm.pgm"'</property><property name="softness">0.1</property>'
 done
 for sl in wipe-left wipe-right wipe-down wipe-circle wipe-barn-door-h slide-left push-left; do
   trans "sleid_$sl" '<property name="mlt_service">frei0r.sleid0r_'"$sl"'</property>'
 done
-trans "luma_abs" '<property name="mlt_service">luma</property><property name="resource">'"$(dirname "$(which melt)")"'/../share/mlt/lumas/PAL/luma05.pgm</property>'
+# trans "luma_abs" '<property name="mlt_service">luma</property><property name="resource">'"$(dirname "$(which melt)")"'/../share/mlt/lumas/PAL/luma05.pgm</property>'
