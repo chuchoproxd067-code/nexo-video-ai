@@ -194,20 +194,27 @@ jobs:
           [ "$n" -ge 14 ] || { echo "::error title=Recursos de ejemplo::solo $n archivos"; rc=1; }
           exit $rc
 
-      # Qué servicios (filtros, productores, transiciones) trae realmente el MLT de MSYS2.
+      # Qué servicios (filtros, productores, transiciones) trae realmente el MLT de MSYS2 y con qué propiedades.
       - name: List melt services
         if: always()
         continue-on-error: true
         shell: msys2 {0}
         run: |
-          for k in producers filters transitions consumers; do
-            melt -query $k 2>/dev/null | grep -E '^ *- ' | sed 's/^ *- //' | sort | tr '\n' ' ' > evidence/services_$k.txt
-            echo "::notice title=melt $k::$(cut -c1-3800 evidence/services_$k.txt)"
+          note() { # titulo archivo
+            i=0
+            fold -w 3500 "$2" | while IFS= read -r chunk; do i=$((i+1)); echo "::notice title=$1 $i::$chunk"; done
+          }
+          melt -query filters 2>/dev/null | grep -E '^ *- ' | sed 's/^ *- //' | grep -v '^avfilter\.' | sort | tr '\n' ' ' > evidence/filters_core.txt
+          melt -query filters 2>/dev/null | grep -E '^ *- avfilter\.' | sed 's/^ *- avfilter\.//' | sort | tr '\n' ' ' > evidence/filters_av.txt
+          note "filtros MLT" evidence/filters_core.txt
+          note "filtros avfilter" evidence/filters_av.txt
+          find /ucrt64/share/mlt -maxdepth 2 -type d | tr '\n' ' ' > evidence/dirs.txt; note "carpetas share/mlt" evidence/dirs.txt
+          find /ucrt64/share/mlt -iname '*.pgm' -o -iname '*.png' | head -80 | tr '\n' ' ' > evidence/lumas.txt; note "lumas" evidence/lumas.txt
+          for q in "filter=affine" "filter=dynamictext" "filter=brightness" "filter=volume" "filter=vidstab" "filter=crop" "filter=freeze" "filter=lift_gamma_gain" "filter=rbpitch" "filter=pitch" "filter=charcoal" "filter=mirror" "filter=box_blur" "filter=qtcrop" "filter=sepia" "filter=greyscale" "filter=invert" "filter=mosaic" "filter=chroma" "filter=chroma_hold" "filter=subtitle" "filter=loudness" "filter=normalizer" "transition=qtblend" "transition=affine" "transition=luma" "producer=qtext" "producer=timewarp" "producer=hold" "producer=color" "transition=frei0r.sleid0r_slide-left"; do
+            melt -query "$q" 2>/dev/null | grep -E 'identifier|^ *- (type|default|minimum|maximum|title)|^ *type:|^ *default:|^ *minimum:|^ *maximum:' | sed 's/^ *//' | tr '\n' ' ' > evidence/q.txt
+            note "$q" evidence/q.txt
           done
-          ls /ucrt64/share/mlt/lumas 2>/dev/null | head -5 | tr '\n' ' ' | sed 's/^/lumas: /'; echo
-          for d in /ucrt64/share/mlt/lumas/*; do [ -d "$d" ] && echo "::notice title=lumas $(basename $d)::$(ls $d | wc -l) archivos: $(ls $d | head -40 | tr '\n' ' ')"; done
-          fc-list 2>/dev/null | head -3 || true
-          ls /ucrt64/share/fonts 2>/dev/null | head || true
+          fc-list 2>/dev/null | head -5 | tr '\n' '|' > evidence/fonts.txt; ls /ucrt64/share/fonts /c/Windows/Fonts 2>/dev/null | head -20 | tr '\n' ' ' >> evidence/fonts.txt; note "fuentes" evidence/fonts.txt
 
       - name: Render NEXO timeline with melt (MSYS2 install)
         shell: msys2 {0}
