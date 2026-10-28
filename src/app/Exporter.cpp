@@ -65,7 +65,9 @@ bool Exporter::start(const nexo::Timeline& timeline, const nexo::ExportSettings&
                                      meltrunner::lastUsefulLines(log_, 8));
         }
     });
-    proc_->start(melt_, {xmlPath, "-progress2", "-consumer", "avformat:" + outPath, "vcodec=libx264", "acodec=aac"});
+    QStringList args{xmlPath, "-progress2"};
+    for (const std::string& a : nexo::meltConsumerArgs(settings, outPath.toStdString())) args << QString::fromStdString(a);
+    proc_->start(melt_, args);
     return true;
 }
 

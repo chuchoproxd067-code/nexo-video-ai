@@ -42,6 +42,54 @@ std::string fadeKeyframes(const Clip& c, double level) {
 
 }  // namespace
 
+const char* formatExtension(ExportFormat f) {
+    switch (f) {
+        case ExportFormat::Mp4: return "mp4";
+        case ExportFormat::Mov: return "mov";
+        case ExportFormat::WebM: return "webm";
+        case ExportFormat::Gif: return "gif";
+        case ExportFormat::Mp3: return "mp3";
+        case ExportFormat::Wav: return "wav";
+    }
+    return "mp4";
+}
+
+const char* formatLabel(ExportFormat f) {
+    switch (f) {
+        case ExportFormat::Mp4: return "MP4 (H.264 + AAC)";
+        case ExportFormat::Mov: return "MOV (H.264 + AAC)";
+        case ExportFormat::WebM: return "WebM (VP9 + Opus)";
+        case ExportFormat::Gif: return "GIF animado (sin audio)";
+        case ExportFormat::Mp3: return "MP3 (solo audio)";
+        case ExportFormat::Wav: return "WAV (solo audio)";
+    }
+    return "";
+}
+
+bool formatIsAudioOnly(ExportFormat f) { return f == ExportFormat::Mp3 || f == ExportFormat::Wav; }
+
+std::vector<std::string> meltConsumerArgs(const ExportSettings& st, const std::string& out) {
+    const int q = std::clamp(st.quality, 0, 2);
+    std::vector<std::string> a{"-consumer", "avformat:" + out};
+    auto add = [&](std::initializer_list<const char*> l) { for (const char* x : l) a.push_back(x); };
+    switch (st.format) {
+        case ExportFormat::Mp4:
+        case ExportFormat::Mov:
+            add({"vcodec=libx264", "acodec=aac"});
+            a.push_back("crf=" + std::to_string(q == 0 ? 18 : q == 1 ? 23 : 28));
+            add({"preset=veryfast"});
+            break;
+        case ExportFormat::WebM:
+            add({"vcodec=libvpx-vp9", "acodec=libopus", "vb=0", "cpu-used=5"});
+            a.push_back("crf=" + std::to_string(q == 0 ? 25 : q == 1 ? 31 : 38));
+            break;
+        case ExportFormat::Gif: add({"vcodec=gif", "an=1"}); break;
+        case ExportFormat::Mp3: add({"vn=1", "acodec=libmp3lame", "ab=192k"}); break;
+        case ExportFormat::Wav: add({"vn=1", "acodec=pcm_s16le"}); break;
+    }
+    return a;
+}
+
 XmlResult buildMltXml(const Timeline& tl, const ExportSettings& st) {
     XmlResult r;
     if (st.width <= 0 || st.height <= 0 || st.width % 2 != 0 || st.height % 2 != 0) {

@@ -10,15 +10,26 @@
 //   composite = superpone el video de cada pista de video con la base
 // Las pistas de audio llevan hide="video".
 #include <string>
+#include <vector>
 
 #include "core/Timeline.h"
 
 namespace nexo {
 
+enum class ExportFormat { Mp4, Mov, WebM, Gif, Mp3, Wav };
+
 struct ExportSettings {
     int width = 1280;
     int height = 720;
+    ExportFormat format = ExportFormat::Mp4;
+    int quality = 1;          // 0 = alta, 1 = media, 2 = baja (solo formatos con pérdida)
 };
+
+const char* formatExtension(ExportFormat f);     // sin punto: "mp4"
+const char* formatLabel(ExportFormat f);         // para mostrar al usuario
+bool formatIsAudioOnly(ExportFormat f);
+// Argumentos del consumidor de melt para escribir `outPath` en ese formato (desde "-consumer").
+std::vector<std::string> meltConsumerArgs(const ExportSettings& settings, const std::string& outPath);
 
 struct XmlResult {
     bool ok = false;

@@ -1,0 +1,46 @@
+name: MLT lab (experimentos)
+
+# Laboratorio rápido: no compila NEXO. Prueba con melt y ffmpeg reales qué sintaxis y qué
+# servicios existen antes de escribirlos en el generador de XML. Los resultados salen como
+# anotaciones (::notice) y en el artefacto lab-evidence.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/mlt-lab.yml"
+      - "lab/**"
+
+permissions:
+  contents: read
+
+jobs:
+  lab:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-mlt
+            mingw-w64-ucrt-x86_64-ffmpeg
+      - name: Optional MLT dependencies
+        shell: msys2 {0}
+        run: |
+          for p in fftw libebur128 libsamplerate rubberband lilv sox rtaudio rnnoise qt6-svg qt6-base; do
+            pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-$p 2>&1 | tail -1 || true
+          done
+      - name: Run lab
+        shell: msys2 {0}
+        run: |
+          mkdir -p evidence
+          for s in lab/*.sh; do echo "=== $s ==="; bash "$s" || echo "::warning title=LAB script falló::$s"; done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lab-evidence-${{ github.sha }}
+          path: evidence/
+          retention-days: 7
