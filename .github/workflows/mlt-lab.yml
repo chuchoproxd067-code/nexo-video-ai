@@ -38,6 +38,21 @@ jobs:
         run: |
           mkdir -p evidence
           for s in lab/*.sh; do echo "=== $s ==="; bash "$s" || echo "::warning title=LAB script falló::$s"; done
+      # GitHub limita a 10 anotaciones por paso: todo el resultado sale en trozos grandes.
+      - name: Report results
+        if: always()
+        shell: bash
+        run: |
+          f=evidence/results.txt
+          [ -f "$f" ] || { echo "::warning::sin resultados"; exit 0; }
+          total=$(wc -c < "$f"); echo "resultados: $total bytes"
+          i=0
+          split -b 9000 -d "$f" evidence/chunk_
+          for c in evidence/chunk_*; do
+            i=$((i+1)); [ $i -gt 10 ] && break
+            msg=$(cat "$c" | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::notice title=LAB parte $i::$msg"
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
