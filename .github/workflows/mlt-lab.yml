@@ -33,36 +33,16 @@ jobs:
           for p in fftw libebur128 libsamplerate rubberband lilv sox rtaudio rnnoise qt6-svg qt6-base; do
             pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-$p 2>&1 | tail -1 || true
           done
-      - name: Lab 10
+      - name: Lab 13
         shell: msys2 {0}
         run: |
           mkdir -p evidence
-          export RESULTS=evidence/results_10.txt
-          for s in lab/10_*.sh; do [ -f "$s" ] && bash "$s" < /dev/null || echo "::warning title=LAB script falló::$s"; done
-      - name: Report 10
+          export RESULTS=evidence/results_13.txt
+          for s in lab/13_*.sh; do [ -f "$s" ] && bash "$s" < /dev/null || echo "::warning title=LAB script falló::$s"; done
+      - name: Report 13
         if: always()
         shell: bash
-        run: bash lab/report.sh 10
-      - name: Lab 11
-        shell: msys2 {0}
-        run: |
-          mkdir -p evidence
-          export RESULTS=evidence/results_11.txt
-          for s in lab/11_*.sh; do [ -f "$s" ] && bash "$s" < /dev/null || echo "::warning title=LAB script falló::$s"; done
-      - name: Report 11
-        if: always()
-        shell: bash
-        run: bash lab/report.sh 11
-      - name: Lab 12
-        shell: msys2 {0}
-        run: |
-          mkdir -p evidence
-          export RESULTS=evidence/results_12.txt
-          for s in lab/12_*.sh; do [ -f "$s" ] && bash "$s" < /dev/null || echo "::warning title=LAB script falló::$s"; done
-      - name: Report 12
-        if: always()
-        shell: bash
-        run: bash lab/report.sh 12
+        run: bash lab/report.sh 13
       - uses: actions/upload-artifact@v4
         if: always()
         with:
