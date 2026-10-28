@@ -33,56 +33,36 @@ jobs:
           for p in fftw libebur128 libsamplerate rubberband lilv sox rtaudio rnnoise qt6-svg qt6-base; do
             pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-$p 2>&1 | tail -1 || true
           done
-      - name: Lab 02
+      - name: Lab 07
         shell: msys2 {0}
         run: |
           mkdir -p evidence
-          export RESULTS=evidence/results_02.txt
-          for s in lab/02_*.sh; do [ -f "$s" ] && bash "$s" || echo "::warning title=LAB script falló::$s"; done
-      - name: Report 02
+          export RESULTS=evidence/results_07.txt
+          for s in lab/07_*.sh; do [ -f "$s" ] && bash "$s" || echo "::warning title=LAB script falló::$s"; done
+      - name: Report 07
         if: always()
         shell: bash
-        run: bash lab/report.sh 02
-      - name: Lab 03
+        run: bash lab/report.sh 07
+      - name: Lab 08
         shell: msys2 {0}
         run: |
           mkdir -p evidence
-          export RESULTS=evidence/results_03.txt
-          for s in lab/03_*.sh; do [ -f "$s" ] && bash "$s" || echo "::warning title=LAB script falló::$s"; done
-      - name: Report 03
+          export RESULTS=evidence/results_08.txt
+          for s in lab/08_*.sh; do [ -f "$s" ] && bash "$s" || echo "::warning title=LAB script falló::$s"; done
+      - name: Report 08
         if: always()
         shell: bash
-        run: bash lab/report.sh 03
-      - name: Lab 04
+        run: bash lab/report.sh 08
+      - name: Lab 09
         shell: msys2 {0}
         run: |
           mkdir -p evidence
-          export RESULTS=evidence/results_04.txt
-          for s in lab/04_*.sh; do [ -f "$s" ] && bash "$s" || echo "::warning title=LAB script falló::$s"; done
-      - name: Report 04
+          export RESULTS=evidence/results_09.txt
+          for s in lab/09_*.sh; do [ -f "$s" ] && bash "$s" || echo "::warning title=LAB script falló::$s"; done
+      - name: Report 09
         if: always()
         shell: bash
-        run: bash lab/report.sh 04
-      - name: Lab 05
-        shell: msys2 {0}
-        run: |
-          mkdir -p evidence
-          export RESULTS=evidence/results_05.txt
-          for s in lab/05_*.sh; do [ -f "$s" ] && bash "$s" || echo "::warning title=LAB script falló::$s"; done
-      - name: Report 05
-        if: always()
-        shell: bash
-        run: bash lab/report.sh 05
-      - name: Lab 06
-        shell: msys2 {0}
-        run: |
-          mkdir -p evidence
-          export RESULTS=evidence/results_06.txt
-          for s in lab/06_*.sh; do [ -f "$s" ] && bash "$s" || echo "::warning title=LAB script falló::$s"; done
-      - name: Report 06
-        if: always()
-        shell: bash
-        run: bash lab/report.sh 06
+        run: bash lab/report.sh 09
       - uses: actions/upload-artifact@v4
         if: always()
         with:
