@@ -33,16 +33,16 @@ jobs:
           for p in fftw libebur128 libsamplerate rubberband lilv sox rtaudio rnnoise qt6-svg qt6-base; do
             pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-$p 2>&1 | tail -1 || true
           done
-      - name: Lab 13
+      - name: Lab 14
         shell: msys2 {0}
         run: |
           mkdir -p evidence
-          export RESULTS=evidence/results_13.txt
-          for s in lab/13_*.sh; do [ -f "$s" ] && bash "$s" < /dev/null || echo "::warning title=LAB script falló::$s"; done
+          export RESULTS=evidence/results_14.txt
+          for s in lab/14_*.sh; do [ -f "$s" ] && bash "$s" < /dev/null || echo "::warning title=LAB script falló::$s"; done
       - name: Report 13
         if: always()
         shell: bash
-        run: bash lab/report.sh 13
+        run: bash lab/report.sh 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:
