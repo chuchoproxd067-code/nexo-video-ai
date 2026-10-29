@@ -10,6 +10,10 @@ CR="40:30:5:5"; R="100:60:270:150"
 ffmpeg -hide_banner -v error -y -f lavfi -i "color=c=0x00ff00:s=640x360:d=3:r=30,drawbox=x=220:y=100:w=200:h=160:color=red:t=fill" -c:v libx264 -pix_fmt yuv420p $E/p_green.mp4
 ffmpeg -hide_banner -v error -y -f lavfi -i "color=c=black:s=640x360,format=rgba,geq=r='255':g='0':b='0':a='if(between(X,100,300)*between(Y,100,200),255,0)'" -frames:v 1 $E/p_text.png
 G="$W/$E/p_green.mp4"; T="$W/$E/p_text.png"
+# melt nunca debe quedarse esperando: sin entrada estándar y con tiempo máximo por render.
+render() { local in="$1" out="$2"; shift 2
+  timeout 120 melt "$in" "$@" -consumer avformat:"$out" vcodec=libx264 acodec=aac > "${out%.*}.log" 2>&1 < /dev/null || true
+  [ -s "$out" ]; }
 ok() { echo "OK $1: $2" >> "$RES"; }
 bad() { echo "FALLA $1: $2" >> "$RES"; }
 cmp() { # nombre valor "expresión awk con v" detalle
@@ -118,7 +122,7 @@ if mk hidden; then cmp hidden.psnr "$(psnr $E/p_baseB.mp4 $E/p_hidden.mp4)" "v>3
 fmtcheck() { # ext calidad flujos_esperados(video,audio)
   out="$E/p_fmt_$1_$2.$1"
   mapfile -t args < <("$TOOL" consumer $1 $2 "$out")
-  melt "$E/clipA.mp4" out=44 "${args[@]}" > "$E/p_fmt_$1_$2.log" 2>&1 < /dev/null
+  timeout 120 melt "$E/clipA.mp4" out=44 "${args[@]}" > "$E/p_fmt_$1_$2.log" 2>&1 < /dev/null
   info=$(ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 "$out" 2>/dev/null | tr '\n' ' ')
   size=$(stat -c %s "$out" 2>/dev/null || echo 0)
   if [ "$size" -gt 1000 ] && echo "$info" | grep -q "$3"; then ok "format.$1.q$2" "$info ($size bytes)"; else bad "format.$1.q$2" "info=[$info] size=$size esperado: $3"; fi
