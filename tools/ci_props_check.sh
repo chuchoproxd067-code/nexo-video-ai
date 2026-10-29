@@ -114,6 +114,17 @@ if mk vertscale "$V"; then
   cmp vertscale.side "$(yregion $E/p_vertscale.mp4 10 20:60:200:150)" "v>100" "vertical al 50%: el lateral muestra la pista inferior (imagen estrecha)"
 fi
 if mk hidden; then cmp hidden.psnr "$(psnr $E/p_baseB.mp4 $E/p_hidden.mp4)" "v>30" "pista oculta = solo la pista inferior"; fi
+# Formatos de exportación: cada uno se renderiza con los argumentos reales de la app y se lee con ffprobe.
+fmtcheck() { # ext calidad flujos_esperados(video,audio)
+  out="$E/p_fmt_$1_$2.$1"
+  mapfile -t args < <("$TOOL" consumer $1 $2 "$out")
+  melt "$E/clipA.mp4" out=44 "${args[@]}" > "$E/p_fmt_$1_$2.log" 2>&1 < /dev/null
+  info=$(ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 "$out" 2>/dev/null | tr '\n' ' ')
+  size=$(stat -c %s "$out" 2>/dev/null || echo 0)
+  if [ "$size" -gt 1000 ] && echo "$info" | grep -q "$3"; then ok "format.$1.q$2" "$info ($size bytes)"; else bad "format.$1.q$2" "info=[$info] size=$size esperado: $3"; fi
+}
+fmtcheck mp4 0 h264; fmtcheck mp4 2 aac; fmtcheck mov 1 h264; fmtcheck webm 1 vp9; fmtcheck webm 1 opus
+fmtcheck gif 1 gif; fmtcheck mp3 1 mp3; fmtcheck wav 1 pcm_s16le
 cat "$RES"
 fails=$(grep -c '^FALLA' "$RES")
 echo "props: $(grep -c '^OK' "$RES") OK, $fails FALLA"

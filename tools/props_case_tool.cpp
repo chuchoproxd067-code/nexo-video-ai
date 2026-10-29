@@ -12,6 +12,17 @@
 using namespace nexo;
 
 int main(int argc, char** argv) {
+    // Modo "consumer": imprime los argumentos de melt para un formato (uno por línea).
+    //   props_case_tool consumer <mp4|mov|webm|gif|mp3|wav> <calidad 0..2> <salida>
+    if (argc == 5 && std::string(argv[1]) == "consumer") {
+        const std::string f = argv[2];
+        ExportSettings es;
+        es.format = f == "mov" ? ExportFormat::Mov : f == "webm" ? ExportFormat::WebM : f == "gif" ? ExportFormat::Gif
+                  : f == "mp3" ? ExportFormat::Mp3 : f == "wav" ? ExportFormat::Wav : ExportFormat::Mp4;
+        es.quality = std::atoi(argv[3]);
+        for (const std::string& a : meltConsumerArgs(es, argv[4])) std::printf("%s\n", a.c_str());
+        return 0;
+    }
     if (argc != 6) { std::fprintf(stderr, "uso: %s caso salida.mlt A B extra\n", argv[0]); return 2; }
     const std::string cs = argv[1], A = argv[3], B = argv[4], X = argv[5];
     Timeline tl({30, 1});
