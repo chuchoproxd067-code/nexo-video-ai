@@ -102,6 +102,17 @@ for sty in wipe-right wipe-down diagonal circle-open diamond clock blinds-h blin
     cmp xstyle.$sty.mid "$(psnr $E/xd.png $E/xs.png)" "v<25" "transición $sty: la zona de mezcla difiere del disolver"
   else bad xstyle.$sty "no renderizó: $(grep -i -E 'fail|error' $E/p_$n.log 2>/dev/null | head -2 | tr '\n' ' ')"; fi
 done
+# Ajuste de aspecto: video vertical 360x640 (franja blanca central) sobre la pista B.
+ffmpeg -hide_banner -v error -y -f lavfi -i "color=c=red:s=360x640:d=3:r=30,drawbox=x=150:y=0:w=60:h=640:color=white:t=fill" -c:v libx264 -pix_fmt yuv420p $E/p_vert.mp4
+V="$W/$E/p_vert.mp4"
+if mk vertfit "$V"; then
+  cmp vertfit.white "$(yregion $E/p_vertfit.mp4 10 10:100:318:130)" "v>200" "vertical: la franja blanca queda en el centro"
+  cmp vertfit.bars "$(yregion $E/p_vertfit.mp4 10 20:100:20:130)" "v>140" "vertical: sin estirar (a los lados se ve la pista inferior, no el rojo del video)"
+fi
+if mk vertscale "$V"; then
+  cmp vertscale.center "$(yregion $E/p_vertscale.mp4 10 6:60:317:150)" "v>200" "vertical al 50%: franja blanca central"
+  cmp vertscale.side "$(yregion $E/p_vertscale.mp4 10 20:60:200:150)" "v>100" "vertical al 50%: el lateral muestra la pista inferior (imagen estrecha)"
+fi
 if mk hidden; then cmp hidden.psnr "$(psnr $E/p_baseB.mp4 $E/p_hidden.mp4)" "v>30" "pista oculta = solo la pista inferior"; fi
 cat "$RES"
 fails=$(grep -c '^FALLA' "$RES")

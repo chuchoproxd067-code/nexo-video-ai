@@ -401,8 +401,12 @@ XmlResult buildMltXml(const Timeline& tl, const ExportSettings& st) {
         if (tl.track(t).kind == TrackKind::Video)
             x << "    <transition>\n      <property name=\"mlt_service\">composite</property>\n"
               << "      <property name=\"a_track\">0</property>\n      <property name=\"b_track\">" << b << "</property>\n"
-              << "      <property name=\"always_active\">1</property>\n      <property name=\"fill\">1</property>\n"
-              << "      <property name=\"distort\">1</property>\n"
+              << "      <property name=\"always_active\">1</property>\n"
+              // Ajuste de aspecto (verificado con melt real): el medio se escala para caber en el cuadro,
+              // centrado, con barras negras si no es 16:9 (distort=1 lo estiraría).
+              << "      <property name=\"geometry\">0/0:100%x100%:100</property>\n"
+              << "      <property name=\"fill\">1</property>\n      <property name=\"distort\">0</property>\n"
+              << "      <property name=\"halign\">centre</property>\n      <property name=\"valign\">middle</property>\n"
               << "    </transition>\n";
     }
     x << "  </tractor>\n</mlt>\n";

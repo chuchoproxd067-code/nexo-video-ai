@@ -89,6 +89,14 @@ int main(int argc, char** argv) {
         if (!tl.setTransition(rb.clip, 20).ok || !tl.setTransitionStyle(rb.clip, cs.substr(7)).ok) { std::fprintf(stderr, "transición falló\n"); return 1; }
         st.assetsDir = X;
     }
+    else if (cs == "vertfit" || cs == "vertscale") {   // X = video vertical 360x640 con franja blanca central
+        if (cs == "vertscale") p.scale = 50;
+        const auto v0 = tl.addTrack("V1", TrackKind::Video);
+        const auto v1 = tl.addTrack("V2", TrackKind::Video);
+        tl.addClip(v0, clip(B, 0, 60));
+        const Result r = tl.addClip(v1, clip(X, 0, 60));
+        tl.setClipProps(r.clip, p);
+    }
     else if (cs == "hidden") { over(p, true); }
     else if (cs == "trackmute") {
         const auto v = tl.addTrack("V1", TrackKind::Video);
