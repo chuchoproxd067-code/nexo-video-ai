@@ -18,25 +18,38 @@ IA propia.
 | Edición | Exportar MP4 | IMPLEMENTADA (pruebas pendientes) | 3 |
 | Edición | Guardar/abrir proyecto | IMPLEMENTADA (pruebas pendientes) | 2 |
 | Edición | Vista previa y reproducción en tiempo real | PARCIAL (fotograma y reproductor externo) | 3 |
-| Edición | Zoom de la línea de tiempo, imán (snap), marcadores, selección múltiple, ripple/roll/slip/slide | PENDIENTE | 3-4 |
-| Edición | Más pistas, bloquear/ocultar/silenciar pista | PENDIENTE | 4 |
+| Edición | Zoom, desplazamiento, imán (snap), marcadores, eliminar y cerrar hueco | IMPLEMENTADA (pruebas a mano pendientes) | 4 |
+| Edición | Selección múltiple, roll/slip/slide | PENDIENTE | 4 |
+| Edición | Más pistas, bloquear/ocultar/silenciar pista, renombrar | COMPLETA Y VERIFICADA (núcleo y render); botones sin probar a mano | 4 |
 | Edición | Clips compuestos (agrupar), proxy, renderizar previa | PENDIENTE | 4 |
 | Audio | Volumen y fundidos por clip | COMPLETA Y VERIFICADA (render); diálogo sin probar | 4 |
-| Audio | Ecualizador, normalizar, reducción de ruido, ducking, mezclador, grabación de voz | PENDIENTE | 4 |
-| Audio | Separar audio del video, cambio de tono | PENDIENTE | 4 |
+| Audio | Normalizar, reducción de ruido, graves/agudos | COMPLETA Y VERIFICADA (render) | 4 |
+| Audio | Ecualizador por bandas, ducking, mezclador, grabación de voz | PENDIENTE | 4-6 |
+| Audio | Separar audio del video, cambio de tono | COMPLETA Y VERIFICADA (tono, render); separar audio sin probar a mano | 4 |
 | Video | Transición: fundido cruzado | COMPLETA Y VERIFICADA (render); diálogo sin probar | 4 |
-| Video | Otras transiciones (deslizar, cortinillas, zoom, etc.) | PENDIENTE | 4 |
-| Video | Velocidad constante/variable, inversa, congelar fotograma | PENDIENTE | 4 |
-| Video | Recorte (crop), rotar, voltear, escala, posición, opacidad, modos de mezcla | PENDIENTE | 4 |
-| Video | Picture-in-picture, pantalla dividida, máscaras | PENDIENTE | 4 |
-| Video | Fotogramas clave (keyframes) de posición, escala, opacidad, rotación | PENDIENTE | 4 |
-| Video | Pantalla verde (croma), estabilización, corrección de lente | PENDIENTE | 4 |
-| Color | Brillo, contraste, saturación, temperatura, tinte, curvas, LUT, ruedas de color, coincidencia de color | PENDIENTE | 4 |
-| Efectos | Filtros y efectos de video (desenfoque, viñeta, mosaico, glitch, etc.) | PENDIENTE | 4 |
-| Texto | Títulos, subtítulos, plantillas de texto, animaciones de texto | PENDIENTE | 4 |
-| Texto | Subtítulos automáticos (voz a texto), importar/exportar SRT | PENDIENTE | 5 |
+| Video | 15 transiciones con patrón (cortinillas, diagonales, iris, reloj, persianas, tablero, espiral) | COMPLETA Y VERIFICADA (render) | 4 |
+| Video | Transiciones de deslizar/empujar/zoom con movimiento | PENDIENTE | 4 |
+| Video | Velocidad constante, inversa, congelar fotograma | COMPLETA Y VERIFICADA (render) | 4 |
+| Video | Velocidad variable (rampas) | PENDIENTE | 4 |
+| Video | Recorte, rotar, voltear, escala, posición, opacidad | COMPLETA Y VERIFICADA (render; recorte sin ampliar) | 4 |
+| Video | Modos de mezcla | PENDIENTE | 4 |
+| Video | Picture-in-picture (escala y posición en una pista superior), pantalla dividida manual | COMPLETA Y VERIFICADA (render) | 4 |
+| Video | Plantillas de pantalla dividida, máscaras | PENDIENTE | 4 |
+| Video | Fotogramas clave de posición, escala, opacidad, rotación | COMPLETA Y VERIFICADA (render); tabla sin probar a mano | 4 |
+| Video | Pantalla verde (croma) | COMPLETA Y VERIFICADA (render) | 4 |
+| Video | Estabilización | PARCIAL (efecto sin medir) | 4 |
+| Video | Corrección de lente | PENDIENTE | 4 |
+| Color | Brillo, contraste, saturación, temperatura | COMPLETA Y VERIFICADA (render) | 4 |
+| Color | Tinte, curvas, LUT, ruedas de color, coincidencia de color | PENDIENTE | 4 |
+| Efectos | 8 efectos: desenfoque, nitidez, viñeta, mosaico, blanco y negro, sepia, invertir, espejo | COMPLETA Y VERIFICADA (render) | 4 |
+| Efectos | Biblioteca amplia de filtros y efectos (glitch, destellos, etc.) | PENDIENTE | 4-6 |
+| Texto | Títulos y subtítulos como clips de texto (fuente, tamaño, color, posición, contorno) | COMPLETA Y VERIFICADA (render y dibujado) | 4 |
+| Texto | Plantillas de texto, animaciones de texto | PENDIENTE | 4 |
+| Texto | Importar/exportar SRT | IMPLEMENTADA (pruebas a mano pendientes) | 4 |
+| Texto | Subtítulos automáticos (voz a texto) | PENDIENTE | 5 |
 | Elementos | Pegatinas, superposiciones, formas, fondos | PENDIENTE (contenido propio/libre) | 4-6 |
-| Exportación | MP4/MOV/otros formatos, resolución, tasa, calidad, GIF, solo audio | PARCIAL (solo MP4 H.264/AAC) | 4 |
+| Exportación | MP4, MOV, WebM, GIF, MP3, WAV; resolución y calidad | Ver «format.*» en la evidencia de CI (STATUS.md) | 4 |
+| Exportación | Tasa de fotogramas distinta de la del proyecto, bitrate manual | PENDIENTE | 4 |
 | Exportación | Aceleración por GPU (NVENC) | PENDIENTE | 7 |
 | Exportación | Subir a redes sociales | PENDIENTE | 6 |
 | Captura | Grabar pantalla/cámara/voz | PENDIENTE | 6 |

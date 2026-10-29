@@ -2,7 +2,7 @@
 
 Editor de video de escritorio para Windows con asistente de IA (en desarrollo).
 
-> **Estado real:** base técnica. Hay un modelo de línea de tiempo con deshacer/rehacer, guardado de proyectos, un generador de MLT XML verificado con un render real, y una ventana Qt de demostración. **Importar y exportar están escritos pero aún sin probar a mano; no hay vista previa ni reproducción.** Ver [STATUS.md](STATUS.md).
+> **Estado real:** editor de video funcional en construcción. Importar, línea de tiempo multipista (zoom, imán, marcadores, pistas), propiedades por clip (velocidad, inversa, congelar, transformación, fotogramas clave, color, efectos, croma, audio), texto y subtítulos, 15 estilos de transición, y exportación a MP4/MOV/WebM/GIF/MP3/WAV con `melt`. Las propiedades se miden con renders reales en CI; **el propietario aún no ha probado a mano esta versión.** No hay reproducción en tiempo real ni asistente de IA todavía. Ver [STATUS.md](STATUS.md).
 
 ## Descargar una compilación
 

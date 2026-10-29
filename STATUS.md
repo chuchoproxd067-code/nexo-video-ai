@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Fase actual: **2 — Base y compilación remota** (en curso).
+Fase actual: **4 — Herramientas profesionales** (implementada; pendiente de que el propietario pruebe el ZIP a mano).
 
 | Función | Clasificación | Evidencia |
 |---|---|---|
@@ -26,7 +26,23 @@ Fase actual: **2 — Base y compilación remota** (en curso).
 | Paquete de Windows con MSYS2 (`bin/`, `lib/mlt`, `share/mlt`) | PARCIAL | Se compila, empaqueta y arranca en CI sin MSYS2 (`--version`). **El propietario aún no ha abierto este ZIP a mano.** Tamaño y tiempo de compilación sin medir |
 | Auditoría de licencias del paquete | PARCIAL | Inventario de MLT, FFmpeg y Qt en `THIRD_PARTY_LICENSES.md` (FFmpeg es GPL-3.0 con x264/x265 → el proyecto es GPLv3). Falta inventariar las ~160 DLL restantes y añadir los textos de licencia al paquete |
 | Motor multimedia en la app (importar, vista previa) | PENDIENTE | Decisiones 0003 y 0004 |
-| Exportación de video desde la app | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Botón Exportar, `Exporter` lanza `melt` y relee el MP4 para verificarlo; el formato de `-progress2` (`Current Frame: N, percentage: N`) está verificado con la salida real de melt en CI; falta probar el botón a mano |
+| Exportación de video desde la app | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Botón Exportar con diálogo de formato/calidad/resolución, `Exporter` lanza `melt` y relee el MP4 para verificarlo; el formato de `-progress2` (`Current Frame: N, percentage: N`) está verificado con la salida real de melt en CI; falta probar el botón a mano |
+| Velocidad (0,1×–16×), inversa y congelar fotograma | COMPLETA Y VERIFICADA (núcleo y render); diálogo sin probar a mano | `tools/ci_props_check.sh` (render real con melt, `timewarp` y `hold`): duración 60→30 y 60→120 fotogramas, primer fotograma = fuente 0 / último del tramo (inversa) / fotograma congelado; cambia la duración del clip conservando el tramo del medio. Limitación: el audio cambia de tono con la velocidad (no se conserva) |
+| Transformación: posición, escala, rotación, opacidad, volteo | COMPLETA Y VERIFICADA (render); diálogo sin probar a mano | Render real: escala 50 % y desplazamiento dejan ver la pista inferior; rotación 45° recorta las esquinas del recuadro; opacidad 0,5 = mezcla medida (97 entre 16 y 180); volteo ≈ `hflip` de ffmpeg (PSNR>22). Opacidad por `brightness alpha` (hallazgo de laboratorio: el `rect` de affine ignora la opacidad) |
+| Recorte (crop) | COMPLETA Y VERIFICADA (render); con limitación | `avfilter.crop`: la región recortada queda a escala 1:1 y centrada, el resto en negro (no «recorta y amplía» como Filmora). El filtro `crop` de MLT no recortaba de forma visible |
+| Fotogramas clave (posición, escala, giro, opacidad) | COMPLETA Y VERIFICADA (render); tabla del diálogo sin probar a mano | Render real: inicio opaco al 100 %, final al 30 % y casi transparente; interpolación lineal; posiciones absolutas del producer (hallazgo de laboratorio) |
+| Color: brillo, contraste, saturación, temperatura | COMPLETA Y VERIFICADA (render) | Render real: brillo +0,3 sube la luminancia (125→159), contraste y temperatura cambian la imagen (PSNR<25), saturación 0 = grises (SATAVG<1). Sin curvas, ruedas, LUT ni tinte |
+| Efectos de video (desenfoque, nitidez, viñeta, mosaico, blanco y negro, sepia, invertir, espejo) | COMPLETA Y VERIFICADA (render) | Los 8 se miden por PSNR frente al original (todos <31 dB = modifican la imagen). Una lista cerrada, no una biblioteca de cientos como Filmora |
+| Pantalla verde (croma) | COMPLETA Y VERIFICADA (render) | Fondo verde se vuelve transparente (se ve la pista inferior, luminancia 178 frente a 180) y el cuadro rojo se conserva. El suavizado («blend») aún no tiene efecto |
+| Estabilización | PARCIAL | Se genera `vidstab` y el render termina bien, pero **su efecto no está medido** (no hay un video con temblor de prueba) |
+| Audio por clip: silenciar, reducir ruido, normalizar, graves/agudos, tono, separar audio | COMPLETA Y VERIFICADA (render) menos la separación en la ventana | Silenciado −91 dB; reducción de ruido (`rnnoise`), normalizar (`dynamic_loudness`), `bass`/`treble` y tono (`rbpitch`) probados en laboratorio y con render del paquete (audio presente, 60 fotogramas). Sin ecualizador por bandas, ducking ni mezclador |
+| Clips de texto/títulos | COMPLETA Y VERIFICADA (render y dibujado) | Qt dibuja un PNG RGBA a pantalla completa (`TextRender`, prueba `text_render_test` con la plataforma *offscreen*); melt lo compone: dentro de las letras no se ve la pista inferior, fuera sí. Sin animaciones de texto ni plantillas |
+| Subtítulos SRT (importar/exportar) | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Lectura/escritura en el núcleo con pruebas; el paso a clips de texto y los menús no se han probado a mano |
+| Pistas: añadir/quitar/renombrar, silenciar/ocultar/bloquear | COMPLETA Y VERIFICADA (núcleo y render de silenciar/ocultar); botones sin probar a mano | Pista silenciada −91 dB; pista oculta = solo la inferior (PSNR>30). Núcleo con pruebas |
+| Marcadores, zoom, desplazamiento, imán, regla de tiempo, menú contextual | IMPLEMENTADA, PERO CON PRUEBAS PENDIENTES | Compila en MSVC y MSYS2; interacción sin probar a mano |
+| Transiciones con 15 estilos (cortinillas, diagonales, iris, reloj, persianas, tablero, espiral…) | COMPLETA Y VERIFICADA (render); selector sin probar a mano | Patrones PGM propios (CC0) en `assets/lumas`; cada estilo se renderiza (100 fotogramas) y la zona de mezcla difiere del disolver (PSNR≈10 dB) |
+| Ajuste de aspecto (videos verticales o 4:3) | COMPLETA Y VERIFICADA (render) | Un video 360×640 ya no se estira: la franja central queda centrada y a los lados se ve la pista inferior; también a escala 50 % |
+| Exportación: MP4, MOV, WebM (VP9+Opus), GIF, MP3, WAV, calidad y resolución | VER LA FILA DE FORMATOS EN «Resultados de CI» | Los argumentos de melt de cada formato se prueban en CI (`format.*`); el estado de cada uno depende de ese resultado |
 | Asistente de IA | PENDIENTE | Fase 5 |
 
 ## Limitaciones conocidas
@@ -34,5 +50,8 @@ Fase actual: **2 — Base y compilación remota** (en curso).
 - Licencia: el propietario delegó la decisión; se adopta **GPLv3 con repositorio público** (MLT y FFmpeg con x264 son GPL). El texto `LICENSE` aún no está en el repositorio: hay que añadirlo desde la web de GitHub (Add file → Create new file → `LICENSE` → *Choose a license template*).
 - Las acciones de GitHub usan versiones por etiqueta mayor (`@v4`); conviene fijarlas por SHA antes de la Fase 7.
 
+## Qué NO está en la Fase 4 (sigue PENDIENTE; ver FILMORA_PARITY.md)
+Modos de mezcla, máscaras, curvas/LUT/ruedas de color, tinte, ducking y mezclador de audio, ecualizador por bandas, velocidad variable (rampas), animaciones de texto y plantillas, pegatinas y formas, clips compuestos, proxy, selección múltiple, slip/slide, grabación de voz/pantalla, reproducción en tiempo real dentro del visor, aceleración por GPU. «Todas las funciones de Filmora 11» no está cumplido: es un objetivo largo y varias de estas funciones dependen de las fases 5 y 6.
+
 ## Próxima tarea
-Que el propietario abra a mano el ZIP de *Windows build (MSYS2 + MLT)*. Después: confirmar que la app con importación/exportación compila en CI, probarlo a mano y retirar el workflow MSVC.
+Que el propietario abra a mano el ZIP de *Windows build (MSYS2 + MLT)* y pruebe: importar, añadir clips, **Propiedades del clip (doble clic)**, texto (tecla T), transiciones, exportar a MP4/WebM/GIF/MP3. Después: corregir lo que falle y pasar a la Fase 5 (asistente de IA).
