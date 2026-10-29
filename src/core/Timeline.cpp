@@ -1,4 +1,5 @@
 #include "core/Timeline.h"
+#include "core/TransitionStyles.h"
 
 #include <algorithm>
 #include <cmath>
@@ -148,6 +149,15 @@ Frame scaled(Frame delta, double speed) { return static_cast<Frame>(std::llround
 bool Timeline::trackLocked(ClipId id) const {
     Location loc;
     return find(id, loc) && tracks_[loc.track].locked;
+}
+
+Result Timeline::setTransitionStyle(ClipId id, const std::string& style) {
+    Location loc;
+    if (!find(id, loc)) return Result::failure("El clip no existe.");
+    if (!validTransitionStyle(style)) return Result::failure("Estilo de transición desconocido.");
+    if (tracks_[loc.track].locked) return Result::failure("La pista está bloqueada.");
+    tracks_[loc.track].clips[loc.index].transitionStyle = style;
+    return Result::success(id);
 }
 
 Result Timeline::setTransition(ClipId id, Frame frames) {

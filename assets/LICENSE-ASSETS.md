@@ -8,3 +8,8 @@ se pueden usar, modificar y distribuir, también con fines comerciales y sin atr
 
 Son sonidos sintéticos sencillos pensados como material de ejemplo. No sustituyen una biblioteca
 profesional. Para más variedad, ver `docs/RECURSOS_LIBRES.md` (fuentes externas con licencia libre).
+
+## Patrones de transición (`lumas/*.pgm`)
+
+Máscaras de luminosidad (barridos, iris, reloj, persianas…) calculadas con fórmulas matemáticas
+en `tools/gen_assets.py`. También CC0 1.0. Se pueden regenerar con `python3 tools/gen_assets.py assets --lumas`.

@@ -872,6 +872,23 @@ static void testPropsXml() {
     CHECK(t6.setTrackFlags(v6, false, true, false).ok);
     CHECK(contains(xmlOf(t6), "pl_0\" hide=\"video\""));
     (void)a;
+
+    // estilos de transición
+    Timeline t7({30, 1});
+    const std::size_t v7 = t7.addTrack("V", TrackKind::Video);
+    t7.addClip(v7, makeClip(0, 60, 0, "a.mp4"));
+    const Result r7 = t7.addClip(v7, makeClip(60, 60, 0, "b.mp4"));
+    CHECK(t7.setTransition(r7.clip, 20).ok);
+    CHECK(!t7.setTransitionStyle(r7.clip, "no-existe").ok);
+    CHECK(t7.setTransitionStyle(r7.clip, "clock").ok);
+    CHECK(!contains(xmlOf(t7), "lumas/clock.pgm"));              // sin assetsDir: disolver
+    st.assetsDir = "C:\\app\\assets";
+    x = xmlOf(t7);
+    CHECK(contains(x, "C:/app/assets/lumas/clock.pgm") && contains(x, "softness"));
+    Project pj; pj.timeline = t7;
+    std::string err2; Project back;
+    CHECK(fromJson(toJson(pj), back, err2));
+    CHECK(back.timeline.track(0).clips[1].transitionStyle == "clock");
 }
 
 int main() {

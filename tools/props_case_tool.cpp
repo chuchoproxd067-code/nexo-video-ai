@@ -81,6 +81,14 @@ int main(int argc, char** argv) {
         const Result r = tl.addTextClip(v1, tp, 0, 60);
         st.textImages[r.clip] = X;
     }
+    else if (cs.rfind("xstyle:", 0) == 0) {   // A (60) + B (60) con 20 fotogramas de transición de ese estilo
+        const auto v = tl.addTrack("V1", TrackKind::Video);
+        tl.addClip(v, clip(A, 0, 60));
+        Clip b = clip(B, 0, 60); b.timelineStart = 60;
+        const Result rb = tl.addClip(v, b);
+        if (!tl.setTransition(rb.clip, 20).ok || !tl.setTransitionStyle(rb.clip, cs.substr(7)).ok) { std::fprintf(stderr, "transición falló\n"); return 1; }
+        st.assetsDir = X;
+    }
     else if (cs == "hidden") { over(p, true); }
     else if (cs == "trackmute") {
         const auto v = tl.addTrack("V1", TrackKind::Video);

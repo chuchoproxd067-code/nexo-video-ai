@@ -1,4 +1,5 @@
 #include "core/Project.h"
+#include "core/TransitionStyles.h"
 
 #include <algorithm>
 #include <array>
@@ -227,6 +228,7 @@ std::string toJson(const Project& p) {
             if (c.volume != 1.0) jc.set("volume", Value::number(c.volume));
             if (c.fadeIn != 0) jc.set("fadeIn", Value::number(static_cast<double>(c.fadeIn)));
             if (c.transitionIn != 0) jc.set("transitionIn", Value::number(static_cast<double>(c.transitionIn)));
+            if (!c.transitionStyle.empty()) jc.set("transitionStyle", Value::string(c.transitionStyle));
             if (c.fadeOut != 0) jc.set("fadeOut", Value::number(static_cast<double>(c.fadeOut)));
             if (!c.props.isDefault()) jc.set("props", propsToJson(c.props));
             clips.push(std::move(jc));
@@ -365,6 +367,10 @@ bool fromJson(const std::string& text, Project& out, std::string& error) {
                 std::int64_t fv = 0;
                 if (jc.get(key) && !needInt(jc, key, fv, err)) { error = "Clip " + std::to_string(id) + ": " + err; return false; }
                 (key[4] == 'I' ? c.fadeIn : key[4] == 'O' ? c.fadeOut : c.transitionIn) = fv;
+            }
+            if (const json::Value* v = jc.get("transitionStyle")) {
+                if (!v->isString() || !validTransitionStyle(v->asString())) { error = "Clip " + std::to_string(id) + ": estilo de transición inválido."; return false; }
+                c.transitionStyle = v->asString();
             }
             const Result r = tl.insertClip(ti, c);
             if (!r.ok) { error = "Clip " + std::to_string(id) + " en '" + name + "': " + r.error; return false; }

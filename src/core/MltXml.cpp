@@ -339,10 +339,15 @@ XmlResult buildMltXml(const Timeline& tl, const ExportSettings& st) {
               << eb << "\" out=\"" << eb + n - 1 << "\"/>\n  </playlist>\n";
             x << "  <tractor id=\"mix_" << b.id << "\" in=\"0\" out=\"" << n - 1 << "\">\n"
               << "    <multitrack>\n      <track producer=\"mixa_" << b.id << "\"/>\n      <track producer=\"mixb_" << b.id << "\"/>\n    </multitrack>\n";
-            if (tl.track(t).kind == TrackKind::Video)
+            if (tl.track(t).kind == TrackKind::Video) {
                 x << "    <transition>\n      <property name=\"mlt_service\">luma</property>\n"
                   << "      <property name=\"in\">0</property>\n      <property name=\"out\">" << n - 1 << "</property>\n"
-                  << "      <property name=\"a_track\">0</property>\n      <property name=\"b_track\">1</property>\n    </transition>\n";
+                  << "      <property name=\"a_track\">0</property>\n      <property name=\"b_track\">1</property>\n";
+                if (!b.transitionStyle.empty() && !st.assetsDir.empty())
+                    x << "      <property name=\"resource\">" << esc(normalizePath(st.assetsDir)) << "/lumas/" << b.transitionStyle
+                      << ".pgm</property>\n      <property name=\"softness\">0.15</property>\n";
+                x << "    </transition>\n";
+            }
             x << "    <transition>\n      <property name=\"mlt_service\">mix</property>\n"
               << "      <property name=\"in\">0</property>\n      <property name=\"out\">" << n - 1 << "</property>\n"
               << "      <property name=\"a_track\">0</property>\n      <property name=\"b_track\">1</property>\n    </transition>\n"

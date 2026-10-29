@@ -1,5 +1,7 @@
 #include "Exporter.h"
 
+#include <QCoreApplication>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
@@ -19,6 +21,7 @@ bool Exporter::start(const nexo::Timeline& timeline, const nexo::ExportSettings&
     if (!tmp_->isValid()) { error = "No se pudo crear una carpeta temporal."; return false; }
     nexo::ExportSettings st = settings;
     st.mediaFrames = mediaFrames_;
+    st.assetsDir = QDir(QCoreApplication::applicationDirPath() + "/../assets").absolutePath().toStdString();
     if (!textrender::prepare(timeline, st, tmp_->path(), error)) return false;
     const nexo::XmlResult xml = nexo::buildMltXml(timeline, st);
     if (!xml.ok) { error = QString::fromStdString(xml.error); return false; }

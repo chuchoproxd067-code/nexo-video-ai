@@ -92,6 +92,16 @@ if mk text "$T"; then
   cmp text.inside "$(yregion $E/p_text.mp4 10 20:20:150:150)" "v<($(yregion $E/clipB.mp4 10 20:20:150:150))-30 || v>($(yregion $E/clipB.mp4 10 20:20:150:150))+30" "el texto/PNG cubre la pista inferior"
   cmp text.outside "$(yregion $E/p_text.mp4 10 40:30:5:5)" "v>$cornerB-12 && v<$cornerB+12" "fuera del texto se ve la pista inferior"
 fi
+# Transiciones con patrón: A(0..59) + B con 20 fotogramas de mezcla = 100 fotogramas; la zona de mezcla debe diferir del disolver.
+"$TOOL" "xstyle:" $E/p_xd.mlt "$A" "$B" "$W/assets" && render $E/p_xd.mlt $E/p_xd.mp4
+for sty in wipe-right wipe-down diagonal circle-open diamond clock blinds-h blinds-v bars-v checker spiral wipe-left wipe-up diagonal-inv circle-close; do
+  n=x_$sty
+  if "$TOOL" "xstyle:$sty" $E/p_$n.mlt "$A" "$B" "$W/assets" && render $E/p_$n.mlt $E/p_$n.mp4; then
+    cmp xstyle.$sty.frames "$(nframes $E/p_$n.mp4)" "v==100" "transición $sty: duración correcta"
+    png $E/p_xd.mp4 50 $E/xd.png; png $E/p_$n.mp4 50 $E/xs.png
+    cmp xstyle.$sty.mid "$(psnr $E/xd.png $E/xs.png)" "v<25" "transición $sty: la zona de mezcla difiere del disolver"
+  else bad xstyle.$sty "no renderizó: $(grep -i -E 'fail|error' $E/p_$n.log 2>/dev/null | head -2 | tr '\n' ' ')"; fi
+done
 if mk hidden; then cmp hidden.psnr "$(psnr $E/p_baseB.mp4 $E/p_hidden.mp4)" "v>30" "pista oculta = solo la pista inferior"; fi
 cat "$RES"
 fails=$(grep -c '^FALLA' "$RES")

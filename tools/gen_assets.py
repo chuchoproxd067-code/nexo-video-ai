@@ -251,8 +251,53 @@ def music_lofi(bars=8, bpm=80):
     return fade_edges(norm(lowpass(buf, 4200), 0.75), 30)
 
 
+# ---------------------------------------------------------------------------------------------
+# Patrones de transición (lumas PGM): negro = se revela primero, blanco = al final.
+
+LW, LH = 640, 360
+
+
+def luma_patterns():
+    y, x = np.mgrid[0:LH, 0:LW]
+    x = (x + 0.5) / LW
+    y = (y + 0.5) / LH
+    ar = LW / LH
+    dx, dy = (x - 0.5) * ar, (y - 0.5)
+    r = np.sqrt(dx ** 2 + dy ** 2)
+    ang = (np.arctan2(dy, dx) + np.pi) / (2 * np.pi)
+    cx, cy = np.floor(x * 10).astype(int), np.floor(y * 6).astype(int)
+    cell = np.random.default_rng(7).random((6, 10))[cy, cx]
+    bar = np.floor(x * 10).astype(int)
+    return {
+        "wipe-right": x, "wipe-left": 1 - x, "wipe-down": y, "wipe-up": 1 - y,
+        "diagonal": (x + y) / 2, "diagonal-inv": (x + 1 - y) / 2,
+        "circle-open": r, "circle-close": 1 - r,
+        "diamond": np.abs(dx) / ar + np.abs(dy),
+        "clock": ang,
+        "blinds-h": (y * 8) % 1.0, "blinds-v": (x * 12) % 1.0,
+        "bars-v": np.where(bar % 2 == 0, y, 1 - y),
+        "checker": cell * 0.85 + 0.15 * ((x * 10) % 1.0),
+        "spiral": (ang + r * 2.2) % 1.0,
+    }
+
+
+def save_lumas(out):
+    d = os.path.join(out, "lumas")
+    os.makedirs(d, exist_ok=True)
+    for name, v in luma_patterns().items():
+        v = (v - v.min()) / (v.max() - v.min())
+        data = np.round(v * 255).astype(np.uint8)
+        with open(os.path.join(d, name + ".pgm"), "wb") as f:
+            f.write(b"P5\n%d %d\n255\n" % (LW, LH))
+            f.write(data.tobytes())
+        print(os.path.relpath(os.path.join(d, name + ".pgm")))
+
+
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "assets"
+    if "--lumas" in sys.argv:          # solo los patrones de transición (no regenera los sonidos)
+        save_lumas(out)
+        return
     sfx = os.path.join(out, "sfx"); music = os.path.join(out, "music")
     os.makedirs(sfx, exist_ok=True); os.makedirs(music, exist_ok=True)
     items = [
@@ -274,6 +319,7 @@ def main():
     for kind, name, x in items:
         p = save(os.path.join(sfx if kind == "sfx" else music, name), x)
         print(os.path.relpath(p), f"{len(x) / SR:.1f}s")
+    save_lumas(out)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 #include "Previewer.h"
 
+#include <QCoreApplication>
+#include <QDir>
 #include <QFile>
 
 #include "MeltRunner.h"
@@ -25,6 +27,7 @@ void Previewer::startPending() {
     st.width = 640;
     st.height = 360;
     st.mediaFrames = mediaFrames_;
+    st.assetsDir = QDir(QCoreApplication::applicationDirPath() + "/../assets").absolutePath().toStdString();
     tmp_ = std::make_unique<QTemporaryDir>();
     if (!tmp_->isValid()) { emit failed("No se pudo crear una carpeta temporal."); return; }
     QString terr;

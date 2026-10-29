@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QPair>
 #include <QDesktopServices>
+#include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -38,6 +39,7 @@
 #include "BuildInfo.h"
 #include "ClipDialogs.h"
 #include "core/Subtitles.h"
+#include "core/TransitionStyles.h"
 #include "Exporter.h"
 #include "MediaImporter.h"
 #include "Previewer.h"
@@ -507,15 +509,33 @@ void MainWindow::editTransition() {
         for (const nexo::Clip& c : tl.track(t).clips) if (c.id == id) clip = &c;
     if (!clip) return;
     const double fps = double(tl.frameRate().num) / double(tl.frameRate().den);
-    bool ok = false;
-    const double sec = QInputDialog::getDouble(this, "Fundido cruzado",
-        "Duración en segundos (0 = quitar). Los dos clips se solapan esa duración y el vídeo total se acorta lo mismo:",
-        double(clip->transitionIn) / fps, 0.0, 30.0, 2, &ok, Qt::WindowFlags(), 0.25);
-    if (!ok) return;
-    const nexo::Frame n = nexo::secondsToFrames(sec, tl.frameRate());
-    const auto r = history_.apply("Fundido cruzado", [&](nexo::Timeline& t) { return t.setTransition(id, n); });
-    statusBar()->showMessage(r.ok ? "Fundido cruzado aplicado" : QString::fromStdString(r.error), 7000);
-    refresh();
+    QDialog dlg(this);
+    dlg.setWindowTitle("Transición");
+    auto* form = new QFormLayout(&dlg);
+    auto* secs = new QDoubleSpinBox; secs->setRange(0, 30); secs->setDecimals(2); secs->setSingleStep(0.25); secs->setSuffix(" s");
+    secs->setValue(double(clip->transitionIn) / fps);
+    auto* style = new QComboBox;
+    int cur = 0, i = 0;
+    for (const nexo::TransitionStyle& ts : nexo::transitionStyles()) {
+        style->addItem(QString::fromUtf8(ts.label), QString::fromUtf8(ts.id));
+        if (clip->transitionStyle == ts.id) cur = i;
+        ++i;
+    }
+    style->setCurrentIndex(cur);
+    form->addRow("Duración (0 = quitar). Los dos clips se solapan esa duración y el total se acorta lo mismo", secs);
+    form->addRow("Estilo", style);
+    auto* bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    form->addRow(bb);
+    connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    if (dlg.exec() != QDialog::Accepted) return;
+    const nexo::Frame n = nexo::secondsToFrames(secs->value(), tl.frameRate());
+    const std::string st = style->currentData().toString().toStdString();
+    applyEdit("Transición", [&](nexo::Timeline& t) {
+        const nexo::Result r = t.setTransition(id, n);
+        if (!r.ok) return r;
+        return t.setTransitionStyle(id, st);
+    });
 }
 
 void MainWindow::fillResources() {

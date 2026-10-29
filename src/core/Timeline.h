@@ -54,6 +54,7 @@ struct Clip {
     // Fundido cruzado con el clip anterior de la pista: los dos clips se solapan exactamente estos
     // fotogramas (timelineStart = fin del anterior - transitionIn). No necesita material extra.
     Frame transitionIn = 0;
+    std::string transitionStyle;   // "" = disolver; ver core/TransitionStyles.h
     ClipKind kind = ClipKind::Media;
     TextProps text;              // solo si kind == Text
     ClipProps props;             // velocidad, transformación, color, efectos, croma, audio
@@ -108,6 +109,8 @@ public:
     // Pone (frames>0) o quita (0) el fundido cruzado con el clip anterior. Los clips deben estar
     // pegados; este y los siguientes de la pista se desplazan para conservar la continuidad.
     Result setTransition(ClipId id, Frame frames);
+    // Estilo (patrón de barrido) de la transición que ENTRA en este clip. "" = disolver.
+    Result setTransitionStyle(ClipId id, const std::string& style);
     // Reemplaza las propiedades del clip. Si cambian velocidad/inversa/congelado, la duración se
     // recalcula para conservar el mismo tramo del medio (error si chocaría con otro clip).
     Result setClipProps(ClipId id, const ClipProps& props);

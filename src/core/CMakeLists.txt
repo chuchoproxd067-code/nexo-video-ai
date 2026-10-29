@@ -5,6 +5,7 @@ add_library(nexo_core STATIC
   Json.cpp
   Project.cpp
   MltXml.cpp
+  TransitionStyles.cpp
   ClipProps.cpp
   Subtitles.cpp
   MediaProbe.cpp

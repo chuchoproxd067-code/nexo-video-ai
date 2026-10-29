@@ -30,6 +30,8 @@ struct ExportSettings {
     // PNG RGBA a tamaño completo (width x height) ya dibujado para cada clip de texto (lo genera
     // la aplicación con Qt; el núcleo no dibuja texto).
     std::map<ClipId, std::string> textImages;
+    // Carpeta "assets" con lumas/<estilo>.pgm para los estilos de transición. Vacía = solo disolver.
+    std::string assetsDir;
 };
 
 const char* formatExtension(ExportFormat f);     // sin punto: "mp4"
