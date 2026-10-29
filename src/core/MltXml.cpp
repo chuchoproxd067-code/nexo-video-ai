@@ -273,11 +273,16 @@ XmlResult buildMltXml(const Timeline& tl, const ExportSettings& st) {
 
             // ----- video (solo pistas de video) -----
             if (isVideoTrack) {
-                if (p.cropLeft != 0 || p.cropRight != 0 || p.cropTop != 0 || p.cropBottom != 0)
-                    x << filter("crop", {{"left", std::to_string(std::lround(st.width * p.cropLeft / 100.0))},
-                                         {"right", std::to_string(std::lround(st.width * p.cropRight / 100.0))},
-                                         {"top", std::to_string(std::lround(st.height * p.cropTop / 100.0))},
-                                         {"bottom", std::to_string(std::lround(st.height * p.cropBottom / 100.0))}});
+                // Recorte: avfilter.crop deja la región recortada a escala 1:1 centrada y el resto en negro
+                // (verificado con melt real; el filtro `crop` de MLT no recorta de forma visible).
+                if (p.cropLeft != 0 || p.cropRight != 0 || p.cropTop != 0 || p.cropBottom != 0) {
+                    auto even = [](double v) { return std::max<long>(2, std::lround(v / 2.0) * 2); };
+                    const long cw = even(st.width * (100 - p.cropLeft - p.cropRight) / 100.0);
+                    const long ch = even(st.height * (100 - p.cropTop - p.cropBottom) / 100.0);
+                    const long cx = std::lround(st.width * p.cropLeft / 100.0), cy = std::lround(st.height * p.cropTop / 100.0);
+                    x << filter("avfilter.crop", {{"av.x", std::to_string(cx)}, {"av.y", std::to_string(cy)},
+                                                  {"av.w", std::to_string(cw)}, {"av.h", std::to_string(ch)}, {"av.keep_aspect", "0"}});
+                }
                 if (p.flipH) x << filter("avfilter.hflip", {});
                 if (p.flipV) x << filter("avfilter.vflip", {});
                 if (p.brightness != 0 || p.contrast != 1 || p.saturation != 1)

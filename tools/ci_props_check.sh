@@ -59,7 +59,10 @@ if mk kf; then
   cmp kf.f0 "$(yregion $E/p_kf.mp4 1 $CR)" "v<$cornerA+30" "fotograma clave inicial: A opaco a 100%"
   cmp kf.f58 "$(yregion $E/p_kf.mp4 58 $CR)" "v>$cornerB-30" "fotograma clave final: pequeño y casi transparente"
 fi
-mk crop && cmp crop.left "$(yregion $E/p_crop.mp4 10 40:40:5:150)" "v>($(yregion $E/clipB.mp4 10 40:40:5:150))-12 && v<($(yregion $E/clipB.mp4 10 40:40:5:150))+12" "recorte izquierdo 25%: se ve la pista inferior"
+if mk crop; then
+  cmp crop.left "$(yregion $E/p_crop.mp4 10 30:40:5:150)" "v<30" "recorte izquierdo 25%: la franja recortada queda en negro"
+  cmp crop.keep "$(yregion $E/p_crop.mp4 10 40:40:300:150)" "v>($(yregion $E/p_baseA.mp4 10 40:40:380:150))-6 && v<($(yregion $E/p_baseA.mp4 10 40:40:380:150))+6" "la región conservada sigue visible"
+fi
 if mk flip; then
   ffmpeg -hide_banner -v error -y -i $E/p_baseA.mp4 -vf hflip $E/flipref.mp4
   png $E/flipref.mp4 10 $E/fr.png; png $E/p_flip.mp4 10 $E/fo.png
