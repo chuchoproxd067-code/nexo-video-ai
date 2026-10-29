@@ -17,8 +17,14 @@
 #include <QUrl>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QApplication>
 #include <QInputDialog>
+#include <QLineEdit>
 #include <QKeySequence>
+#include <QMenu>
+#include <QMenuBar>
+#include <QFile>
+#include <QTextStream>
 #include <QLabel>
 #include <QListWidget>
 #include <QMessageBox>
@@ -30,6 +36,8 @@
 #include <QToolBar>
 
 #include "BuildInfo.h"
+#include "ClipDialogs.h"
+#include "core/Subtitles.h"
 #include "Exporter.h"
 #include "MediaImporter.h"
 #include "Previewer.h"
@@ -76,23 +84,75 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
 
     auto* tb = addToolBar("Principal");
     tb->setMovable(false);
-    auto* openA = tb->addAction("Abrir…");
-    auto* saveA = tb->addAction("Guardar");
-    auto* saveAsA = tb->addAction("Guardar como…");
-    tb->addSeparator();
-    auto* importA = tb->addAction("Importar medios…");
-    auto* addA = tb->addAction("Añadir a la línea de tiempo");
-    auto* playA = tb->addAction("Reproducir");
-    auto* exportA = tb->addAction("Exportar…");
-    tb->addSeparator();
-    auto* split = tb->addAction("Dividir en el cursor");
-    auto* fxA = tb->addAction("Volumen y fundidos…");
-    auto* trA = tb->addAction("Fundido cruzado…");
-    auto* del = tb->addAction("Eliminar clip");
+    auto* openA = new QAction("Abrir…", this);
+    auto* saveA = new QAction("Guardar", this);
+    auto* saveAsA = new QAction("Guardar como…", this);
+    auto* importA = new QAction("Importar medios…", this);
+    auto* addA = new QAction("Añadir a la línea de tiempo", this);
+    auto* playA = new QAction("Reproducir", this);
+    auto* exportA = new QAction("Exportar…", this);
+    auto* split = new QAction("Dividir en el cursor", this);
+    auto* propsA = new QAction("Propiedades del clip…", this);
+    auto* fxA = new QAction("Volumen y fundidos…", this);
+    auto* trA = new QAction("Fundido cruzado…", this);
+    auto* textA = new QAction("Añadir texto…", this);
+    auto* editTextA = new QAction("Editar texto…", this);
+    auto* detachA = new QAction("Separar audio", this);
+    auto* del = new QAction("Eliminar clip", this);
+    auto* delRipple = new QAction("Eliminar y cerrar el hueco", this);
+    auto* undo = new QAction("Deshacer", this);
+    auto* redo = new QAction("Rehacer", this);
+    auto* markA = new QAction("Marcador en el cursor", this);
+    auto* unmarkA = new QAction("Quitar marcador más cercano", this);
+    auto* addVA = new QAction("Añadir pista de video", this);
+    auto* addAA = new QAction("Añadir pista de audio", this);
+    auto* remTA = new QAction("Quitar pista (vacía)", this);
+    auto* renTA = new QAction("Renombrar pista…", this);
+    auto* srtIn = new QAction("Importar subtítulos (.srt)…", this);
+    auto* srtOut = new QAction("Exportar subtítulos (.srt)…", this);
+    auto* zin = new QAction("Acercar", this);
+    auto* zout = new QAction("Alejar", this);
+    auto* zfit = new QAction("Ajustar a la ventana", this);
+    auto* snapA = new QAction("Imán (pegar a bordes y marcadores)", this);
+    snapA->setCheckable(true);
+    snapA->setChecked(true);
     del->setShortcut(QKeySequence::Delete);
+    delRipple->setShortcut(Qt::SHIFT | Qt::Key_Delete);
     split->setShortcut(Qt::Key_S);
-    auto* undo = tb->addAction("Deshacer");
-    auto* redo = tb->addAction("Rehacer");
+    propsA->setShortcut(Qt::CTRL | Qt::Key_E);
+    textA->setShortcut(Qt::Key_T);
+    markA->setShortcut(Qt::Key_M);
+    undo->setShortcut(QKeySequence::Undo);
+    redo->setShortcut(QKeySequence::Redo);
+    zin->setShortcut(Qt::CTRL | Qt::Key_Plus);
+    zout->setShortcut(Qt::CTRL | Qt::Key_Minus);
+    openA->setShortcut(QKeySequence::Open);
+    saveA->setShortcut(QKeySequence::Save);
+    for (QAction* a : {openA, saveA, importA, addA, playA, exportA}) tb->addAction(a);
+    tb->addSeparator();
+    for (QAction* a : {split, propsA, textA, del}) tb->addAction(a);
+    tb->addSeparator();
+    for (QAction* a : {undo, redo, zin, zout, zfit}) tb->addAction(a);
+
+    auto* mFile = menuBar()->addMenu("Archivo");
+    for (QAction* a : {openA, saveA, saveAsA}) mFile->addAction(a);
+    mFile->addSeparator();
+    for (QAction* a : {importA, exportA, playA}) mFile->addAction(a);
+    auto* mEdit = menuBar()->addMenu("Edición");
+    for (QAction* a : {undo, redo}) mEdit->addAction(a);
+    mEdit->addSeparator();
+    for (QAction* a : {split, del, delRipple}) mEdit->addAction(a);
+    mEdit->addSeparator();
+    for (QAction* a : {markA, unmarkA}) mEdit->addAction(a);
+    auto* mClip = menuBar()->addMenu("Clip");
+    for (QAction* a : {addA, propsA, fxA, trA, textA, editTextA, detachA}) mClip->addAction(a);
+    auto* mTrack = menuBar()->addMenu("Pista");
+    for (QAction* a : {addVA, addAA, remTA, renTA}) mTrack->addAction(a);
+    auto* mSub = menuBar()->addMenu("Subtítulos");
+    for (QAction* a : {srtIn, srtOut}) mSub->addAction(a);
+    auto* mView = menuBar()->addMenu("Ver");
+    for (QAction* a : {zin, zout, zfit}) mView->addAction(a);
+    mView->addAction(snapA);
 
     auto* libraryDock = new QDockWidget("Biblioteca", this);
     library_ = new QListWidget;
@@ -136,34 +196,62 @@ MainWindow::MainWindow() : history_(emptyTimeline()) {
         const nexo::ClipId id = timeline_->selectedClip();
         if (id == 0) { statusBar()->showMessage("Selecciona un clip (clic) y coloca el cursor donde dividir.", 5000); return; }
         const nexo::Frame at = timeline_->playhead();
-        const auto r = history_.apply("Dividir", [&](nexo::Timeline& t) { return t.splitClip(id, at); });
-        statusBar()->showMessage(r.ok ? "Clip dividido" : QString::fromStdString(r.error), 5000);
-        refresh();
+        applyEdit("Dividir", [&](nexo::Timeline& t) { return t.splitClip(id, at); });
     });
     connect(trA, &QAction::triggered, this, [this] { editTransition(); });
     connect(fxA, &QAction::triggered, this, [this] { editClipFx(); });
+    connect(propsA, &QAction::triggered, this, [this] { editProps(); });
+    connect(textA, &QAction::triggered, this, [this] { addText(); });
+    connect(editTextA, &QAction::triggered, this, [this] { editText(); });
+    connect(detachA, &QAction::triggered, this, [this] { detachAudio(); });
+    connect(delRipple, &QAction::triggered, this, [this] { removeRipple(); });
+    connect(markA, &QAction::triggered, this, [this] { addMarkerHere(); });
+    connect(unmarkA, &QAction::triggered, this, [this] { removeNearestMarker(); });
+    connect(addVA, &QAction::triggered, this, [this] { addTrack(nexo::TrackKind::Video); });
+    connect(addAA, &QAction::triggered, this, [this] { addTrack(nexo::TrackKind::Audio); });
+    connect(remTA, &QAction::triggered, this, [this] { removeTrack(); });
+    connect(renTA, &QAction::triggered, this, [this] { renameTrack(); });
+    connect(srtIn, &QAction::triggered, this, [this] { importSrt(); });
+    connect(srtOut, &QAction::triggered, this, [this] { exportSrt(); });
+    connect(zin, &QAction::triggered, this, [this] { timeline_->zoomIn(); });
+    connect(zout, &QAction::triggered, this, [this] { timeline_->zoomOut(); });
+    connect(zfit, &QAction::triggered, this, [this] { timeline_->zoomFit(); });
+    connect(snapA, &QAction::toggled, this, [this](bool on) { timeline_->setSnap(on); });
     connect(del, &QAction::triggered, this, [this] {
         const nexo::ClipId id = timeline_->selectedClip();
         if (id == 0) { statusBar()->showMessage("Selecciona un clip para eliminarlo.", 4000); return; }
-        const auto r = history_.apply("Eliminar clip", [&](nexo::Timeline& t) { return t.removeClip(id); });
-        statusBar()->showMessage(r.ok ? "Clip eliminado" : QString::fromStdString(r.error), 4000);
-        refresh();
+        applyEdit("Eliminar clip", [&](nexo::Timeline& t) { return t.removeClip(id); });
     });
     connect(undo, &QAction::triggered, this, [this] { history_.undo(); refresh(); });
     connect(redo, &QAction::triggered, this, [this] { history_.redo(); refresh(); });
+    connect(timeline_, &TimelineWidget::clipActivated, this, [this](nexo::ClipId) { editProps(); });
+    connect(timeline_, &TimelineWidget::trackFlagsRequested, this, [this](int tr, bool m, bool h, bool l) {
+        applyEdit("Pista", [=](nexo::Timeline& t) { return t.setTrackFlags(std::size_t(tr), m, h, l); });
+    });
+    connect(timeline_, &TimelineWidget::contextRequested, this, [=](nexo::ClipId id, int, const QPoint& pos) {
+        QMenu menu(this);
+        if (id != 0) {
+            const nexo::Clip* c = clipById(id);
+            menu.addAction(propsA);
+            if (c && c->kind == nexo::ClipKind::Text) menu.addAction(editTextA);
+            menu.addAction(fxA); menu.addAction(trA); menu.addAction(split); menu.addAction(detachA);
+            menu.addSeparator();
+            menu.addAction(del); menu.addAction(delRipple);
+        } else {
+            menu.addAction(textA); menu.addAction(markA); menu.addAction(unmarkA);
+            menu.addSeparator();
+            menu.addAction(addVA); menu.addAction(addAA); menu.addAction(renTA); menu.addAction(remTA);
+        }
+        menu.exec(pos);
+    });
 
-    auto applyEdit = [this](const char* label, std::function<nexo::Result(nexo::Timeline&)> op) {
-        const auto r = history_.apply(label, op);
-        statusBar()->showMessage(r.ok ? QString::fromUtf8(label) : QString::fromStdString(r.error), 5000);
-        refresh();
-    };
-    connect(timeline_, &TimelineWidget::moveRequested, this, [applyEdit](nexo::ClipId id, int tr, nexo::Frame s) {
+    connect(timeline_, &TimelineWidget::moveRequested, this, [this](nexo::ClipId id, int tr, nexo::Frame s) {
         applyEdit("Mover clip", [=](nexo::Timeline& t) { return t.moveClip(id, std::size_t(tr), s); });
     });
-    connect(timeline_, &TimelineWidget::trimStartRequested, this, [applyEdit](nexo::ClipId id, nexo::Frame d) {
+    connect(timeline_, &TimelineWidget::trimStartRequested, this, [this](nexo::ClipId id, nexo::Frame d) {
         applyEdit("Recortar inicio", [=](nexo::Timeline& t) { return t.trimStart(id, d); });
     });
-    connect(timeline_, &TimelineWidget::trimEndRequested, this, [applyEdit](nexo::ClipId id, nexo::Frame d) {
+    connect(timeline_, &TimelineWidget::trimEndRequested, this, [this](nexo::ClipId id, nexo::Frame d) {
         applyEdit("Recortar final", [=](nexo::Timeline& t) { return t.trimEnd(id, d); });
     });
     connect(timeline_, &TimelineWidget::playheadChanged, this, [this](nexo::Frame) { requestPreview(); });
@@ -244,9 +332,9 @@ void MainWindow::onProbed(const QString& path, const nexo::MediaInfo& info) {
         const nexo::Frame diff = info.frames > verifyFrames_ ? info.frames - verifyFrames_ : verifyFrames_ - info.frames;
         const QString sizeText = QString::number(QFileInfo(path).size() / 1024.0 / 1024.0, 'f', 1) + " MB";
         verifyPath_.clear();
-        if (info.hasVideo && diff <= 2) {
+        if ((verifyAudioOnly_ ? info.hasAudio : info.hasVideo) && diff <= 2) {
             QMessageBox::information(this, "Exportación terminada",
-                QString("Video exportado y verificado:\n%1\n\n%2 · %3").arg(path, describe(info), sizeText));
+                QString("Archivo exportado y verificado:\n%1\n\n%2 · %3").arg(path, describe(info), sizeText));
             statusBar()->showMessage("Exportado y verificado: " + path, 8000);
         } else {
             QMessageBox::warning(this, "Exportación",
@@ -256,6 +344,7 @@ void MainWindow::onProbed(const QString& path, const nexo::MediaInfo& info) {
         return;
     }
     info_.insert(path, info);
+    syncMediaFrames();
     project_.addMedia(path.toStdString());
     addLibraryItem(path, QFileInfo(path).fileName() + "  —  " + describe(info));
     statusBar()->showMessage("Medio listo: " + QFileInfo(path).fileName(), 4000);
@@ -323,20 +412,12 @@ void MainWindow::exportVideo() {
         return;
     }
 
-    const QStringList presets{"720p (1280×720)", "1080p (1920×1080)", "480p (854×480)"};
-    bool ok = false;
-    const QString choice = QInputDialog::getItem(this, "Exportar", "Resolución:", presets, 0, false, &ok);
-    if (!ok) return;
     nexo::ExportSettings st;
-    if (choice.startsWith("1080")) { st.width = 1920; st.height = 1080; }
-    else if (choice.startsWith("480")) { st.width = 854; st.height = 480; }
-
-    QString out = QFileDialog::getSaveFileName(this, "Exportar video", QDir::homePath() + "/nexo.mp4", "Video MP4 (*.mp4)");
-    if (out.isEmpty()) return;
-    if (!out.endsWith(".mp4", Qt::CaseInsensitive)) out += ".mp4";
-
+    QString out;
+    if (!dialogs::chooseExport(this, st, out, QDir::homePath())) return;
     verifyFrames_ = tl.duration();
-    beginRender("Exportando video", st, out);
+    verifyAudioOnly_ = nexo::formatIsAudioOnly(st.format);
+    beginRender("Exportando", st, out);
 }
 
 bool MainWindow::beginRender(const QString& title, const nexo::ExportSettings& st, const QString& out) {
@@ -473,6 +554,7 @@ void MainWindow::addResource(QListWidgetItem* item) {
 void MainWindow::rebuildLibrary() {
     library_->clear();
     info_.clear();
+    syncMediaFrames();
     importErrors_.clear();
     const auto missing = project_.missingMedia();
     QStringList toRead;
@@ -546,4 +628,175 @@ void MainWindow::showFrame() {
 void MainWindow::resizeEvent(QResizeEvent* e) {
     QMainWindow::resizeEvent(e);
     showFrame();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Edición avanzada (todas las operaciones pasan por History: deshacer/rehacer sirve para todo)
+
+void MainWindow::applyEdit(const char* label, const std::function<nexo::Result(nexo::Timeline&)>& op) {
+    const auto r = history_.apply(label, op);
+    statusBar()->showMessage(r.ok ? QString::fromUtf8(label) : QString::fromStdString(r.error), 6000);
+    if (!r.ok) QApplication::beep();
+    refresh();
+}
+
+void MainWindow::syncMediaFrames() {
+    std::map<std::string, nexo::Frame> m;
+    for (auto it = info_.constBegin(); it != info_.constEnd(); ++it) m[it.key().toStdString()] = it.value().frames;
+    exporter_->setMediaFrames(m);
+    previewer_->setMediaFrames(m);
+}
+
+const nexo::Clip* MainWindow::clipById(nexo::ClipId id) const {
+    const nexo::Timeline& tl = history_.timeline();
+    for (std::size_t t = 0; t < tl.trackCount(); ++t)
+        for (const nexo::Clip& c : tl.track(t).clips) if (c.id == id) return &c;
+    return nullptr;
+}
+
+int MainWindow::trackOfClip(nexo::ClipId id) const {
+    const nexo::Timeline& tl = history_.timeline();
+    for (std::size_t t = 0; t < tl.trackCount(); ++t)
+        for (const nexo::Clip& c : tl.track(t).clips) if (c.id == id) return int(t);
+    return -1;
+}
+
+void MainWindow::editProps() {
+    const nexo::ClipId id = timeline_->selectedClip();
+    const nexo::Clip* clip = clipById(id);
+    if (!clip) { statusBar()->showMessage("Selecciona un clip (clic) para editar sus propiedades.", 5000); return; }
+    const int tr = trackOfClip(id);
+    nexo::ClipProps np;
+    const nexo::Clip copy = *clip;
+    if (!dialogs::editProps(this, copy, history_.timeline().track(std::size_t(tr)).kind, history_.timeline().frameRate(), np)) return;
+    applyEdit("Propiedades del clip", [&](nexo::Timeline& t) { return t.setClipProps(id, np); });
+}
+
+void MainWindow::addText() {
+    nexo::TextProps t;
+    t.text = "Título";
+    if (!dialogs::editText(this, "Añadir texto", t)) return;
+    int track = timeline_->currentTrack();
+    const nexo::Timeline& tl = history_.timeline();
+    if (track < 0 || tl.track(std::size_t(track)).kind != nexo::TrackKind::Video) track = findTrack(tl, nexo::TrackKind::Video);
+    if (track < 0) { statusBar()->showMessage("No hay pista de video para el texto.", 5000); return; }
+    const nexo::Frame start = timeline_->playhead();
+    const nexo::Frame dur = nexo::secondsToFrames(3.0, tl.frameRate());
+    applyEdit("Añadir texto", [&](nexo::Timeline& t2) { return t2.addTextClip(std::size_t(track), t, start, dur); });
+}
+
+void MainWindow::editText() {
+    const nexo::Clip* clip = clipById(timeline_->selectedClip());
+    if (!clip || clip->kind != nexo::ClipKind::Text) { statusBar()->showMessage("Selecciona un clip de texto.", 5000); return; }
+    nexo::TextProps t = clip->text;
+    const nexo::ClipId id = clip->id;
+    if (!dialogs::editText(this, "Editar texto", t)) return;
+    applyEdit("Editar texto", [&](nexo::Timeline& t2) { return t2.setText(id, t); });
+}
+
+void MainWindow::addTrack(nexo::TrackKind kind) {
+    const nexo::Timeline& tl = history_.timeline();
+    int n = 1;
+    for (std::size_t i = 0; i < tl.trackCount(); ++i) if (tl.track(i).kind == kind) ++n;
+    const std::string name = std::string(kind == nexo::TrackKind::Video ? "Video " : "Audio ") + std::to_string(n);
+    applyEdit("Añadir pista", [&](nexo::Timeline& t) { t.addTrack(name, kind); return nexo::Result::success(); });
+}
+
+void MainWindow::removeTrack() {
+    const int tr = timeline_->currentTrack();
+    if (tr < 0) { statusBar()->showMessage("Pulsa el nombre de la pista que quieres quitar.", 5000); return; }
+    applyEdit("Quitar pista", [&](nexo::Timeline& t) { return t.removeTrack(std::size_t(tr)); });
+}
+
+void MainWindow::renameTrack() {
+    const int tr = timeline_->currentTrack();
+    if (tr < 0) { statusBar()->showMessage("Pulsa el nombre de la pista que quieres renombrar.", 5000); return; }
+    bool ok = false;
+    const QString name = QInputDialog::getText(this, "Renombrar pista", "Nombre:", QLineEdit::Normal,
+                                               QString::fromStdString(history_.timeline().track(std::size_t(tr)).name), &ok);
+    if (!ok || name.trimmed().isEmpty()) return;
+    applyEdit("Renombrar pista", [&](nexo::Timeline& t) { return t.renameTrack(std::size_t(tr), name.trimmed().toStdString()); });
+}
+
+void MainWindow::addMarkerHere() {
+    bool ok = false;
+    const QString name = QInputDialog::getText(this, "Marcador", "Nombre (opcional):", QLineEdit::Normal, QString(), &ok);
+    if (!ok) return;
+    const nexo::Frame f = timeline_->playhead();
+    applyEdit("Añadir marcador", [&](nexo::Timeline& t) { return t.addMarker(f, name.toStdString()); });
+}
+
+void MainWindow::removeNearestMarker() {
+    const auto& ms = history_.timeline().markers();
+    if (ms.empty()) { statusBar()->showMessage("No hay marcadores.", 4000); return; }
+    const nexo::Frame f = timeline_->playhead();
+    std::size_t best = 0;
+    for (std::size_t i = 1; i < ms.size(); ++i)
+        if (std::llabs(ms[i].frame - f) < std::llabs(ms[best].frame - f)) best = i;
+    applyEdit("Quitar marcador", [&](nexo::Timeline& t) { return t.removeMarker(best); });
+}
+
+void MainWindow::detachAudio() {
+    const nexo::ClipId id = timeline_->selectedClip();
+    if (id == 0) { statusBar()->showMessage("Selecciona un clip de video.", 5000); return; }
+    const int at = findTrack(history_.timeline(), nexo::TrackKind::Audio);
+    if (at < 0) { statusBar()->showMessage("Añade primero una pista de audio.", 5000); return; }
+    applyEdit("Separar audio", [&](nexo::Timeline& t) { return t.detachAudio(id, std::size_t(at)); });
+}
+
+void MainWindow::removeRipple() {
+    const nexo::ClipId id = timeline_->selectedClip();
+    if (id == 0) { statusBar()->showMessage("Selecciona un clip.", 4000); return; }
+    applyEdit("Eliminar y cerrar el hueco", [&](nexo::Timeline& t) { return t.removeClipRipple(id); });
+}
+
+void MainWindow::importSrt() {
+    const QString path = QFileDialog::getOpenFileName(this, "Importar subtítulos", QString(), "Subtítulos SRT (*.srt)");
+    if (path.isEmpty()) return;
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) { QMessageBox::warning(this, "Subtítulos", "No se pudo abrir el archivo."); return; }
+    const std::string data = f.readAll().toStdString();
+    std::vector<nexo::SubtitleCue> cues;
+    std::string err;
+    if (!nexo::parseSrt(data, history_.timeline().frameRate(), cues, err)) {
+        QMessageBox::warning(this, "Subtítulos", QString::fromStdString(err));
+        return;
+    }
+    if (cues.empty()) { QMessageBox::information(this, "Subtítulos", "El archivo no tiene subtítulos."); return; }
+    nexo::TextProps style;
+    style.size = 6; style.posX = 50; style.posY = 90; style.bold = true;
+    applyEdit("Importar subtítulos", [&](nexo::Timeline& t) {
+        const std::size_t track = t.addTrack("Subtítulos", nexo::TrackKind::Video);
+        for (const nexo::SubtitleCue& c : cues) {
+            nexo::TextProps tp = style;
+            tp.text = c.text;
+            const nexo::Result r = t.addTextClip(track, tp, c.start, c.end - c.start);
+            if (!r.ok) return r;
+        }
+        return nexo::Result::success();
+    });
+}
+
+void MainWindow::exportSrt() {
+    const nexo::Timeline& tl = history_.timeline();
+    int tr = timeline_->currentTrack();
+    auto hasText = [&](int i) {
+        if (i < 0) return false;
+        for (const nexo::Clip& c : tl.track(std::size_t(i)).clips) if (c.kind == nexo::ClipKind::Text) return true;
+        return false;
+    };
+    if (!hasText(tr)) {
+        tr = -1;
+        for (std::size_t i = 0; i < tl.trackCount(); ++i) if (hasText(int(i))) { tr = int(i); break; }
+    }
+    if (tr < 0) { QMessageBox::information(this, "Subtítulos", "Ninguna pista tiene clips de texto."); return; }
+    const QString path = QFileDialog::getSaveFileName(this, "Exportar subtítulos", QDir::homePath() + "/subtitulos.srt", "Subtítulos SRT (*.srt)");
+    if (path.isEmpty()) return;
+    const std::string srt = nexo::formatSrt(nexo::cuesFromTrack(tl, std::size_t(tr)), tl.frameRate());
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly) || f.write(srt.data(), qint64(srt.size())) != qint64(srt.size())) {
+        QMessageBox::warning(this, "Subtítulos", "No se pudo escribir el archivo.");
+        return;
+    }
+    statusBar()->showMessage("Subtítulos exportados: " + path, 6000);
 }

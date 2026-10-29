@@ -5,6 +5,8 @@
 #include <QTemporaryDir>
 #include <memory>
 
+#include <map>
+
 #include "core/MltXml.h"
 
 // Vista previa de un fotograma: genera el MLT XML, pide a `melt` un PNG de esa posición y lo
@@ -13,6 +15,8 @@ class Previewer : public QObject {
     Q_OBJECT
 public:
     explicit Previewer(QObject* parent = nullptr);
+    // Duración (fotogramas) de cada medio, necesaria para invertir clips.
+    void setMediaFrames(std::map<std::string, nexo::Frame> m) { mediaFrames_ = std::move(m); }
     bool available() const { return !melt_.isEmpty(); }
     void request(const nexo::Timeline& timeline, nexo::Frame frame);
 
@@ -23,6 +27,7 @@ signals:
 private:
     void startPending();
 
+    std::map<std::string, nexo::Frame> mediaFrames_;
     QString melt_;
     QProcess* proc_ = nullptr;
     std::unique_ptr<QTemporaryDir> tmp_;

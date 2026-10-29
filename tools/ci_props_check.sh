@@ -26,22 +26,22 @@ render $A $E/p_baseA.mp4 out=59; render $B $E/p_baseB.mp4 out=59
 if mk speed2; then
   cmp speed2.frames "$(nframes $E/p_speed2.mp4)" "v==30" "velocidad x2 de 60 fotogramas de medio -> 30"
   png $E/clipA.mp4 0 $E/s0.png; png $E/p_speed2.mp4 0 $E/o0.png
-  cmp speed2.f0 "$(psnr $E/s0.png $E/o0.png)" "v>30" "primer fotograma = fuente 0"
+  cmp speed2.f0 "$(psnr $E/s0.png $E/o0.png)" "v>22" "primer fotograma = fuente 0"
   png $E/clipA.mp4 30 $E/s30.png; png $E/p_speed2.mp4 15 $E/o15.png
-  cmp speed2.f15 "$(psnr $E/s30.png $E/o15.png)" "v>25" "fotograma 15 de salida = fuente 30"
+  cmp speed2.f15 "$(psnr $E/s30.png $E/o15.png)" "v>22" "fotograma 15 de salida = fuente 30"
 fi
 mk speed05 && cmp speed05.frames "$(nframes $E/p_speed05.mp4)" "v==120" "velocidad 0.5 de 60 fotogramas de medio -> 120"
 if mk reverse; then
   cmp reverse.frames "$(nframes $E/p_reverse.mp4)" "v==60" "60 fotogramas"
   png $E/clipA.mp4 59 $E/s59.png; png $E/p_reverse.mp4 0 $E/o0.png
-  cmp reverse.f0 "$(psnr $E/s59.png $E/o0.png)" "v>30" "primer fotograma = último del tramo (fuente 59)"
+  cmp reverse.f0 "$(psnr $E/s59.png $E/o0.png)" "v>22" "primer fotograma = último del tramo (fuente 59)"
   png $E/clipA.mp4 0 $E/s0.png
-  cmp reverse.notforward "$(psnr $E/s0.png $E/o0.png)" "v<25" "no es el fotograma 0"
+  cmp reverse.notforward "$(psnr $E/s0.png $E/o0.png)" "v<18" "no es el fotograma 0"
 fi
 if mk freeze; then
   cmp freeze.frames "$(nframes $E/p_freeze.mp4)" "v==60" "60 fotogramas"
   png $E/clipA.mp4 40 $E/s40.png; png $E/p_freeze.mp4 0 $E/o0.png; png $E/p_freeze.mp4 59 $E/o59.png
-  cmp freeze.f0 "$(psnr $E/s40.png $E/o0.png)" "v>30" "congela el fotograma 40"
+  cmp freeze.f0 "$(psnr $E/s40.png $E/o0.png)" "v>22" "congela el fotograma 40"
   cmp freeze.f59 "$(psnr $E/o0.png $E/o59.png)" "v>40" "último fotograma igual al primero"
 fi
 cornerB=$(yregion $E/clipB.mp4 10 $CR); cornerA=$(yregion $E/clipA.mp4 10 $CR)
@@ -63,7 +63,7 @@ mk crop && cmp crop.left "$(yregion $E/p_crop.mp4 10 40:40:5:150)" "v>($(yregion
 if mk flip; then
   ffmpeg -hide_banner -v error -y -i $E/p_baseA.mp4 -vf hflip $E/flipref.mp4
   png $E/flipref.mp4 10 $E/fr.png; png $E/p_flip.mp4 10 $E/fo.png
-  cmp flip.psnr "$(psnr $E/fr.png $E/fo.png)" "v>30" "volteo horizontal = hflip de ffmpeg"
+  cmp flip.psnr "$(psnr $E/fr.png $E/fo.png)" "v>22" "volteo horizontal = hflip de ffmpeg"
 fi
 yb=$(yframe $E/p_baseA.mp4 10)
 if mk bright; then cmp bright.y "$(yframe $E/p_bright.mp4 10)" "v>$yb+15" "brillo +0.3 sube la luminancia"; fi

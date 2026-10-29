@@ -5,6 +5,7 @@
 #include <QRegularExpression>
 
 #include "MeltRunner.h"
+#include "TextRender.h"
 
 Exporter::Exporter(QObject* parent) : QObject(parent), melt_(meltrunner::meltPath()) {}
 
@@ -14,11 +15,13 @@ bool Exporter::start(const nexo::Timeline& timeline, const nexo::ExportSettings&
     if (running()) { error = "Ya hay una exportación en curso."; return false; }
     if (outPath.isEmpty()) { error = "No se indicó el archivo de salida."; return false; }
 
-    const nexo::XmlResult xml = nexo::buildMltXml(timeline, settings);
-    if (!xml.ok) { error = QString::fromStdString(xml.error); return false; }
-
     tmp_ = std::make_unique<QTemporaryDir>();
     if (!tmp_->isValid()) { error = "No se pudo crear una carpeta temporal."; return false; }
+    nexo::ExportSettings st = settings;
+    st.mediaFrames = mediaFrames_;
+    if (!textrender::prepare(timeline, st, tmp_->path(), error)) return false;
+    const nexo::XmlResult xml = nexo::buildMltXml(timeline, st);
+    if (!xml.ok) { error = QString::fromStdString(xml.error); return false; }
     const QString xmlPath = tmp_->filePath("proyecto.mlt");
     QFile f(xmlPath);
     if (!f.open(QIODevice::WriteOnly) || f.write(xml.xml.data(), qint64(xml.xml.size())) != qint64(xml.xml.size())) {

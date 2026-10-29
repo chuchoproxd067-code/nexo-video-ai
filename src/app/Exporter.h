@@ -5,6 +5,8 @@
 #include <QTemporaryDir>
 #include <memory>
 
+#include <map>
+
 #include "core/MltXml.h"
 
 // Exporta la línea de tiempo: genera el MLT XML y lanza `melt` como proceso aparte
@@ -14,6 +16,8 @@ class Exporter : public QObject {
 public:
     explicit Exporter(QObject* parent = nullptr);
 
+    // Duración (fotogramas) de cada medio, necesaria para invertir clips.
+    void setMediaFrames(std::map<std::string, nexo::Frame> m) { mediaFrames_ = std::move(m); }
     bool available() const { return !melt_.isEmpty(); }
     bool running() const { return proc_ != nullptr; }
     // Devuelve false (y `error`) si no se pudo empezar; nada se ejecuta en ese caso.
@@ -28,6 +32,7 @@ signals:
 private:
     void onStderr();
 
+    std::map<std::string, nexo::Frame> mediaFrames_;
     QString melt_;
     QProcess* proc_ = nullptr;
     std::unique_ptr<QTemporaryDir> tmp_;

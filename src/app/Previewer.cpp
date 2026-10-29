@@ -3,6 +3,7 @@
 #include <QFile>
 
 #include "MeltRunner.h"
+#include "TextRender.h"
 
 Previewer::Previewer(QObject* parent) : QObject(parent), melt_(meltrunner::meltPath()) {}
 
@@ -23,11 +24,13 @@ void Previewer::startPending() {
     nexo::ExportSettings st;
     st.width = 640;
     st.height = 360;
-    const nexo::XmlResult xml = nexo::buildMltXml(pendingTl_, st);
-    if (!xml.ok) { emit failed(QString::fromStdString(xml.error)); return; }
-
+    st.mediaFrames = mediaFrames_;
     tmp_ = std::make_unique<QTemporaryDir>();
     if (!tmp_->isValid()) { emit failed("No se pudo crear una carpeta temporal."); return; }
+    QString terr;
+    if (!textrender::prepare(pendingTl_, st, tmp_->path(), terr)) { emit failed(terr); return; }
+    const nexo::XmlResult xml = nexo::buildMltXml(pendingTl_, st);
+    if (!xml.ok) { emit failed(QString::fromStdString(xml.error)); return; }
     const QString xmlPath = tmp_->filePath("vista.mlt");
     QFile f(xmlPath);
     if (!f.open(QIODevice::WriteOnly) || f.write(xml.xml.data(), qint64(xml.xml.size())) != qint64(xml.xml.size())) {

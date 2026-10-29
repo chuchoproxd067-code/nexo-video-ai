@@ -1,4 +1,6 @@
 #pragma once
+#include <functional>
+
 #include <QHash>
 #include <QImage>
 #include <QMainWindow>
@@ -40,6 +42,22 @@ private:
     void playExternal();
     void editClipFx();
     void editTransition();
+    void editProps();
+    void addText();
+    void editText();
+    void addTrack(nexo::TrackKind kind);
+    void removeTrack();
+    void renameTrack();
+    void addMarkerHere();
+    void removeNearestMarker();
+    void importSrt();
+    void exportSrt();
+    void detachAudio();
+    void removeRipple();
+    void syncMediaFrames();
+    const nexo::Clip* clipById(nexo::ClipId id) const;
+    int trackOfClip(nexo::ClipId id) const;
+    void applyEdit(const char* label, const std::function<nexo::Result(nexo::Timeline&)>& op);
     bool beginRender(const QString& title, const nexo::ExportSettings& st, const QString& out);
     void rebuildLibrary();
     void fillResources();
@@ -67,4 +85,5 @@ private:
     bool playPending_ = false;      // el render en curso es una vista previa para el reproductor del sistema
     QString verifyPath_;            // archivo exportado pendiente de verificar
     nexo::Frame verifyFrames_ = 0;
+    bool verifyAudioOnly_ = false;
 };

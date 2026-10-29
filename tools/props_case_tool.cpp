@@ -36,8 +36,8 @@ int main(int argc, char** argv) {
         if (!r.ok || !tl.setClipProps(r.clip, p).ok) { std::fprintf(stderr, "setClipProps falló\n"); std::exit(1); }
     };
     ClipProps p;
-    if (cs == "speed2") { p.speed = 2; solo(p, 0, 30); }
-    else if (cs == "speed05") { p.speed = 0.5; solo(p, 0, 120); }
+    if (cs == "speed2") { p.speed = 2; solo(p, 0, 60); }
+    else if (cs == "speed05") { p.speed = 0.5; solo(p, 0, 60); }
     else if (cs == "reverse") { p.reverse = true; solo(p); }
     else if (cs == "freeze") { p.freeze = true; solo(p, 40, 60); }
     else if (cs == "scale50") { p.scale = 50; over(p); }
