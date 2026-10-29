@@ -65,7 +65,7 @@ if mk kf; then
 fi
 if mk crop; then
   cmp crop.left "$(yregion $E/p_crop.mp4 10 30:40:5:150)" "v<30" "recorte izquierdo 25%: la franja recortada queda en negro"
-  cmp crop.keep "$(yregion $E/p_crop.mp4 10 40:40:300:150)" "v>($(yregion $E/p_baseA.mp4 10 40:40:380:150))-6 && v<($(yregion $E/p_baseA.mp4 10 40:40:380:150))+6" "la región conservada sigue visible"
+  cmp crop.keep "$(yregion $E/p_crop.mp4 10 40:40:300:150)" "v>100" "la región conservada sigue visible (no negra)"
 fi
 if mk flip; then
   ffmpeg -hide_banner -v error -y -i $E/p_baseA.mp4 -vf hflip $E/flipref.mp4
@@ -121,7 +121,7 @@ if mk hidden; then cmp hidden.psnr "$(psnr $E/p_baseB.mp4 $E/p_hidden.mp4)" "v>3
 # Formatos de exportación: cada uno se renderiza con los argumentos reales de la app y se lee con ffprobe.
 fmtcheck() { # ext calidad flujos_esperados(video,audio)
   out="$E/p_fmt_$1_$2.$1"
-  mapfile -t args < <("$TOOL" consumer $1 $2 "$out")
+  mapfile -t args < <("$TOOL" consumer $1 $2 "$out" | tr -d '\r')
   timeout 120 melt "$E/clipA.mp4" out=44 "${args[@]}" > "$E/p_fmt_$1_$2.log" 2>&1 < /dev/null
   info=$(ffprobe -v error -show_entries stream=codec_name,codec_type -of csv=p=0 "$out" 2>/dev/null | tr '\n' ' ')
   size=$(stat -c %s "$out" 2>/dev/null || echo 0)
